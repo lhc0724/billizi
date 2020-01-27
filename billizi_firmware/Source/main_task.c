@@ -355,7 +355,7 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
                 tx_buff = get_log_packet(&st_LogAddr);
             }
         }
-        
+
         transmit_data_stream(osal_strlen(tx_buff), tx_buff);
 
         if (read_voltage(READ_EXT) >= EXT_MIN_V) {
@@ -363,6 +363,7 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
                 //communication end. init log variables and transition charge state.
                 uart_disable();
                 charge_enable();
+                ctrl_flags.need_comm = 0;
                 next_evt = EVT_CHARGE;
             } else {
                 excute_timer = 0;
@@ -386,6 +387,12 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
             next_evt = EVT_HOLD_BATT;
             charge_disable();
         }
+        /******
+         * TODO: 
+         * 셀전압 체크 및 전류 측정.
+         * self calibration일 경우 충전전압을 이용해 추가보정
+         * capacity 재측정
+         */
     }
 
     if (events & EVT_HOLD_BATT) {

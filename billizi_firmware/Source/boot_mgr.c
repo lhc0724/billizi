@@ -133,8 +133,6 @@ static Control_flag_t recent_batt_status_check()
 
 uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
 {
-    //log_addr_t keylog_addr;
-    //log_addr_t main_addr;
     Control_flag_t ctrl_flags;
 
     ctrl_flags.flag_all = 0;
