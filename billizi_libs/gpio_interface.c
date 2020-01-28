@@ -13,7 +13,7 @@ void setup_pin()
     P0SEL = BIT0|BIT6;
     P0INP = 0xFF;
     //P0DIR = BIT4|BIT5|BIT7;    //P_(4,5,7) output, use vib_motor
-    P0DIR = BIT4|BIT5;          //P_(4,5) output, P_7 input, use vib_sensor
+    P0DIR = BIT4|BIT5;          //P_(4,5) output, P_(3,7) input, use vib_sensor
 
 	P1SEL = BIT6|BIT7;           //using uart
     P1INP = 0xFF;

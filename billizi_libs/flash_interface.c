@@ -71,6 +71,34 @@ uint8 stored_conn_type(eConnType_t ai_connType)
     return result;
 }
 
+uint16 stored_adc_calib(uint16 calib_ref)
+{
+    flash_16bit_t calib_datas;
+
+    if(calib_ref == 0) {
+        /*******
+         * store to self-calibration option
+         * set to calib_ref address value is 0.
+         * this battery system performs self-calibration. */
+        calib_datas.all_bits = 0;
+        write_flash(FLADDR_CALIB_REF, &calib_datas.all_bits);
+
+        /*******************
+         * setup the initial calibration reference adc value
+         * Maximum Voltage = 6885 * (1.25/8191) * 4 = 4.202784V
+         */
+        calib_datas.high_16bit = 0xFFFF;
+        calib_datas.low_16bit = 6885;
+        write_flash(FLADDR_CALIB_SELF_ST, &calib_datas.all_bits);
+    } else {
+        calib_datas.high_16bit = 0x1000;  //reference flag
+        calib_datas.low_16bit = calib_ref;
+        write_flash(FLADDR_CALIB_REF, &calib_datas.all_bits);
+    }
+
+    return calib_datas.low_16bit;
+}
+
 uint8 load_flash_conntype() 
 {
     flash_8bit_t conn_type;

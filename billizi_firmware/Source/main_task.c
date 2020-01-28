@@ -110,21 +110,10 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
     //uint16 next_interval = 50;
 
     if (events & EVT_FACTORY_INIT) {
-        // uint8 *pMAC;
-        // uint8 i;
-
-        // LL_ReadBDADDR(pMAC);
-        // print_uart("%X", pMAC[0]);
-        // for (i = 1; i < B_ADDR_LEN; i++) {
-        //     print_uart(":%X",pMAC[i]);
-        // }
-        // print_uart("\r\n");
-
         setup_app_register_cb(APP_FACTORY_INIT);
         ble_advert_control(TRUE);
-
+        
         erase_flash_log_area();
-
         osal_set_event(state_taskIDs[TASK_FACTORY_INIT], events);
     }
 
@@ -132,7 +121,7 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         setup_app_register_cb(APP_USER_COMM);
         
         ble_setup_rspData();
-        uart_disable();
+        //uart_disable();
 
         if(ctrl_flags.need_comm && st_LogAddr.head_addr >= FLADDR_LOGDATA_ST) {
             osal_set_event(main_taskID, EVT_KIOSK_PROCESS);
@@ -161,6 +150,12 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         osal_set_event(state_taskIDs[TASK_KIOSK], EVT_EXT_V_MONITORING);
     }
 
+    if (events & EVT_ABNORMAL_TASK) {
+        if(ctrl_flags.abnormal & ERR_BROKEN_CABLE) {
+        }
+        osal_set_event(main_taskID, EVT_ABNORMAL_TASK);
+    }
+
     if (events & DEBUG) {
         
     }
@@ -172,7 +167,8 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
 uint16 Factory_Init_Process(uint8 task_id, uint16 events) 
 {
     uint16 next_interval = 50;
-    flash_16bit_t calib_ref;
+    uint16 calib_value;
+
     flash_8bit_t conn_type;
     float f_batt_v;
 
@@ -181,34 +177,19 @@ uint16 Factory_Init_Process(uint8 task_id, uint16 events)
         if (!ctrl_flags.ref_calib && !ctrl_flags.self_calib) {
             f_batt_v = read_voltage_sampling(10, READ_BATT_SIDE);
             if (f_batt_v <= 2) {
-                //No Detect Battery
-
-                calib_ref.all_bits = 0;
-                //set to calib_ref address value is 0, this battery system performs self-calibration.
-                write_flash(FLADDR_CALIB_REF, &calib_ref.all_bits);
-
-                /*******************
-                 * setup the initial calibration reference adc value
-                 * Maximum Voltage = 6885 * (1.25/8191) * 4 = 4.202784V
-                 */
-                calib_ref.high_16bit = 0xFFFF;
-                calib_ref.low_16bit = 6885;
-                write_flash(FLADDR_CALIB_SELF_ST, &calib_ref.all_bits);
-
-                setup_calib_value(TRUE, calib_ref.low_16bit);
+                //배터리 감지 안됨, self-calibration 모드
+                calib_value = stored_adc_calib(0);
+                setup_calib_value(TRUE, calib_value);
                 ctrl_flags.self_calib = 1;
             } else {
-                calib_ref.high_16bit = 0x1000;  //reference flag
-                calib_ref.low_16bit = read_adc_sampling(10, READ_BATT_SIDE);
-                write_flash(FLADDR_CALIB_REF, &calib_ref.all_bits);
-
-                setup_calib_value(FALSE, calib_ref.low_16bit);
+                //배터리 전압감지, 기준전압(3.7V)으로 판단하며 reference-calibration실행
+                calib_value = stored_adc_calib(read_adc_sampling(10,READ_BATT_SIDE));
+                setup_calib_value(FALSE, calib_value);
                 ctrl_flags.ref_calib = 1;
             }
         } else {
             read_flash(FLADDR_CONNTYPE, FLOPT_UINT32, &conn_type.all_bits);
-            //print_uart("%x\r\n", conn_type.byte_1);
-            if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x03) {
+            if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x04) {
                 //connector type setup ok.
                 ctrl_flags.factory_setup = 0;
             }
@@ -245,6 +226,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     next_task = task_id;
 
     if (events & EVT_CERTIFICATION) {
+        ctrl_flags.certification = check_certification();
         if (!ctrl_flags.certification) {
             //certification success, enable dischg state
             next_evt &= ~(EVT_CERTIFICATION);
@@ -304,6 +286,8 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     if(ctrl_flags.logging) {
         //todo: logging current status
     }
+
+    print_uart("EVT-%#04X\r\n", next_evt);
     osal_start_timerEx(next_task, next_evt, next_interval);
 
     return 0;

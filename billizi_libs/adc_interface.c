@@ -9,12 +9,12 @@ void get_gparam_calib(void *p_value)
     *((float *)p_value) = g_calib;
 }
 
-void setup_calib_value(uint8 self_calib, uint16 adc_ref)
+void setup_calib_value(uint8 calib_opt, uint16 calib_value)
 {   
     float adc_voltage;
 
-    adc_voltage = adc_ref * REF125_UNIT * BATT_RATIO_V;
-    if (self_calib) {
+    adc_voltage = calib_value * REF125_UNIT * BATT_RATIO_V;
+    if (calib_opt) {
         /* set self calibration */
         g_calib = adc_voltage/MAX_BATT_V;    
     }else {

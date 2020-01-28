@@ -31,12 +31,19 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
             case 0x31:
-                osal_set_event(get_main_taskID(), DEBUG|DBG_EVT_A);
-            break;
+                EN_CONN_RETR = 1;
+                RETR_TEST_EN = 1;
+                break;
+            case 0x32:
+                EN_CONN_RETR = 0;
+                break;
+            case 0x33:
+                RETR_TEST_EN = 0;
+                break;
         }
         rx_buff[rx_tail] = '\n';
+
         transmit_comm_data(rx_tail, rx_buff);
-        //print_uart("%s\r\n", rx_buff);
         osal_memset(rx_buff, 0, RX_BUFF_SIZE);
         rx_tail = 0;
     }

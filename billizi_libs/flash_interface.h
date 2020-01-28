@@ -74,8 +74,10 @@ typedef enum FLASH_VARIABLE_OPT {
 }eFlash_Var_t;
 
 typedef enum _CONNECTOR_TYPE {
-    CONN_MICRO_5 = 0x01, CONN_LIGHTING, CONN_USB_C
-}eConnType_t;
+    CONN_MICRO_5  = 0x01,
+    CONN_LIGHTING = 0x02,
+    CONN_USB_C    = 0x04
+} eConnType_t;
 
 typedef union _FLASH_DATA {
     union _EVENTS {
@@ -147,6 +149,7 @@ void read_flash(uint16 ai_addr, eFlash_Var_t value_type, void *p_value);
 float load_flash_calib();
 
 uint8 stored_conn_type(eConnType_t ai_connType);
+uint16 stored_adc_calib(uint16 calib_ref);
 uint8 load_flash_conntype();
 
 void erase_flash_range(uint16 st_addr, uint16 end_addr);

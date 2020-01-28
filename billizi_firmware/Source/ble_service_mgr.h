@@ -76,4 +76,6 @@ void setup_advert_interval();
 void setup_simple_prof_service();
 void GAPRole_Serv_Start();
 
+uint8 check_certification();
+
 #endif
