@@ -2,24 +2,38 @@
 #include "hal_i2c.h"
 
 
-uint8 check_cable_status()
-{
-    uint8 cable_status = 0; 
+// uint8 check_cable_status()
+// {
+//     uint8 cable_status = 0; 
 
-    RETR_TEST_EN = 1;
-    EN_CONN_RETR = 1;
-    
-    delay_us(100);
-    if(!RETR_CABLE_STATUS) {
-        //broken cable
-        cable_status = 1;
-    }
+//     //PMIC auto detect enable
+//     EN_CONN_RETR = 1;
+//     RETR_TEST_EN = 1;
 
-    RETR_TEST_EN = 0;
-    EN_CONN_RETR = 0;
+//     while(1) {
+//         if (!RETR_CABLE_STATUS) {
+//             break;
+//         }
+//     }
 
-    return cable_status;
-}
+//     EN_CONN_RETR = 0;
+//     delay_us(1000);
+
+//     while(1) {
+//         if (RETR_CABLE_STATUS) {
+//             cable_status = 1;
+//             break;
+//         }
+//     }
+//     if(RETR_CABLE_STATUS) {
+//         //cable check ok.
+//         cable_status = 1;
+//     }
+
+//     RETR_TEST_EN = 0;
+
+//     return cable_status;
+// }
 
 void sensor_status_init(sensor_info_t *p_sensor)
 {

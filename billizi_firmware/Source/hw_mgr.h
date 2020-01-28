@@ -35,7 +35,7 @@ typedef union _ctrl_flag
         uint8 trans_status : 1;  //change state flag.
 
         uint8 abnormal : 6;     
-        //total 16 bits
+        //total 15 bits
     };
     uint16 flag_all;
 }Control_flag_t;
@@ -55,7 +55,7 @@ typedef struct _SENSOR_STATUS {
 static int16 calc_i2c_temperature(uint8 * i2c_data);
 
 int16 read_temperature();
-uint8 check_cable_status();
+//uint8 check_cable_status();
 
 void sensor_status_init(sensor_info_t *p_sensor);
 void get_batt_status(batt_info_t *p_batt_status);

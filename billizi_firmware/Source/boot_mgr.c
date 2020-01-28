@@ -13,7 +13,7 @@ void Billizi_BootMgr_Init(uint8 task_id)
     osal_set_event(task_id, BOOT); 
 }
 
-static uint8 check_adc_calibration() 
+static uint8 check_adc_calibration(Control_flag_t *apst_flags) 
 {
     flash_16bit_t tmp_flash;
 
@@ -30,6 +30,7 @@ static uint8 check_adc_calibration()
     } else if (tmp_flash.high_16bit == 0x1000) {
         //adc system setup reference calibration value
         setup_calib_value(FALSE, tmp_flash.low_16bit);
+        apst_flags->ref_calib = 1;
         return 0;
     }
 
@@ -44,6 +45,7 @@ static uint8 check_adc_calibration()
         }else {
             setup_calib_value(TRUE, tmp_flash.low_16bit);
         }
+        apst_flags->self_calib = 1;
     }
 
     return 0;
@@ -51,28 +53,27 @@ static uint8 check_adc_calibration()
 
 static uint8 check_billizi_conntype()
 {
-    flash_8bit_t tmp_flash;
     uint8 conn_type = load_flash_conntype();
-
 
     if (conn_type == 0xFF) {
         //this is not stored connector type
         return 1;
     }
 
-    if(!(tmp_flash.byte_1 & 0x03)) {
+    if((conn_type & 0x07) > 0x04) {
+        //잘못된 커넥터 타입
         return 1;
     }
-    
+
     return 0;
 }
 
 /************************************************
- * @fn      recent_batt_status_check
+ * @fn      previous_batt_status_check
  * 
  * @brief   이번 부팅 이전 배터리 마지막 상태를 확인.
  *          문제 없으면 0 리턴 */
-static Control_flag_t recent_batt_status_check()
+static uint8 previous_batt_status_check()
 {
     log_addr_t latest_logAddr;      
     log_data_t tmp_logdata;
@@ -83,8 +84,8 @@ static Control_flag_t recent_batt_status_check()
     if(latest_logAddr.key_addr < FLADDR_LOGKEY_ST) {
         //key address all empty.
         //this battery starts service for the first time.
-        ctrl_flag.flag_all = 0;
-        return ctrl_flag;
+        ctrl_flag.abnormal = 0;
+        return ctrl_flag.abnormal;
     }
 
     //search to the key-log location.
@@ -114,21 +115,25 @@ static Control_flag_t recent_batt_status_check()
         }
     }
     
+    return ctrl_flag.abnormal;
+}
+
+static void current_battery_status_check(Control_flag_t *apst_flag)
+{
     //check current condition.
 
-    if (check_cable_status()) {
-        ctrl_flag.abnormal |= ERR_BROKEN_CABLE;
+    // if (!check_cable_status()) {
+    //     print_uart("ERR-Broken\r\n");
+    //     apst_flag->abnormal |= ERR_BROKEN_CABLE;
+    // }
+
+    if (read_temperature() >= 700) {
+        apst_flag->abnormal |= ERR_TEMP_OVER;
     }
 
-    if (read_temperature() >= 70) {
-        ctrl_flag.abnormal |= ERR_TEMP_OVER;
+    if (read_voltage(READ_BATT_SIDE) < MIN_BATT_V) {
+        apst_flag->abnormal |= ERR_LOSS_BATTERY;
     }
-
-    if (read_voltage(READ_BATT_SIDE) < 2.5) {
-        ctrl_flag.abnormal |= ERR_LOSS_BATTERY;
-    }
-
-    return ctrl_flag;
 }
 
 uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
@@ -149,27 +154,32 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
         uart_enable();
 
         /* check  */
-        if (check_adc_calibration()) {
-            print_uart("ERR-CALIB\r\n");
+        if (check_adc_calibration(&ctrl_flags)) {
+            //print_uart("ERR-CALIB\r\n");
             ctrl_flags.factory_setup = 1;
         }
         
         if(check_billizi_conntype()) {
-            print_uart("ERR-CONN\r\n");
+            //print_uart("ERR-CONN\r\n");
             ctrl_flags.factory_setup = 1;
         }
         
         if(ctrl_flags.factory_setup) {
             print_uart("START FACTORY INIT\r\n");
+            ctrl_flags.self_calib = 0;
+            ctrl_flags.ref_calib = 0;
             osal_set_event(get_main_taskID(), EVT_FACTORY_INIT);
             set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);
             return 0;
         }
 
-        ctrl_flags = recent_batt_status_check();
+        ctrl_flags.abnormal = previous_batt_status_check();
+        current_battery_status_check(&ctrl_flags);
+        //print_uart("FLAGS-%#04X\r\n", ctrl_flags.flag_all);
         if(ctrl_flags.abnormal & 0x1F) {
             osal_set_event(get_main_taskID(), EVT_ABNORMAL_TASK);
         }else {
+            ctrl_flags.serv_en = 1;
             osal_set_event(get_main_taskID(), EVT_USER_SERVICE);
         }
         set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);
