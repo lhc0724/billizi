@@ -9,6 +9,8 @@
 uint8 log_system_init(log_data_t *apst_log, log_addr_t *apst_addr);
 uint8 LogAddress_valid_check(uint16 addr);
 
+void generate_new_log_address(log_addr_t *apst_addr);
+
 uint16 get_key_address();
 uint16 log_location_parser(uint16 key_addr);
 uint16 check_key_log(uint16 keylog_addr, Control_flag_t *apst_flags);

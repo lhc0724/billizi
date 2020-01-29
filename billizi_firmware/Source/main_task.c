@@ -17,6 +17,7 @@ uint8 *tx_buff;
 Control_flag_t ctrl_flags;
 
 static log_data_t st_BattLog;
+static log_data_t st_Times;
 static log_addr_t st_LogAddr;
 
 static uint32 sys_timer;
@@ -79,10 +80,10 @@ void Billizi_Process_Init(uint8 task_id)
     setup_gap_gatt_service();
     setup_simple_prof_service();
 
-#if defined FEATURE_OAD
-    //Initialize OAD management attributes
-    VOID OADTarget_AddService();
-#endif
+// #if defined FEATURE_OAD
+//     //Initialize OAD management attributes
+//     VOID OADTarget_AddService();
+// #endif
 
     setup_advert_interval();
 
@@ -90,7 +91,9 @@ void Billizi_Process_Init(uint8 task_id)
     HCI_EXT_HaltDuringRfCmd(HCI_EXT_HALT_DURING_RF_DISABLE);
 
     log_system_init(&st_BattLog, &st_LogAddr);
+    st_Times.time_info.time_datas = 0;
     sensor_status_init(&sensor_vals);
+    batt_status.left_cap = BATT_CAPACITY;
     ctrl_flags.flag_all = 0;
 
     GAPRole_Serv_Start();
@@ -98,10 +101,10 @@ void Billizi_Process_Init(uint8 task_id)
 
 void StateMachine_Process_init(uint8 task_id)
 {
-    state_taskIDs[0] = task_id++;
-    state_taskIDs[1] = task_id++;
-    state_taskIDs[2] = task_id++;
-    state_taskIDs[3] = task_id;
+    state_taskIDs[TASK_FACTORY_INIT] = task_id++;
+    state_taskIDs[TASK_USER]         = task_id++;
+    state_taskIDs[TASK_KIOSK]        = task_id++;
+    state_taskIDs[TASK_ABNORMAL]     = task_id;
 }
 
 uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events) 
@@ -110,6 +113,7 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
     //uint16 next_interval = 50;
 
     if (events & EVT_FACTORY_INIT) {
+        VOID OADTarget_AddService();
         setup_app_register_cb(APP_FACTORY_INIT);
         ble_advert_control(TRUE);
         
@@ -127,10 +131,13 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
             osal_set_event(main_taskID, EVT_KIOSK_PROCESS);
         }else {
             //todo: get new log address
-
+            OADTarget_DelService();
             ble_advert_control(TRUE);
             ctrl_flags.certification = 1;
-            
+
+            init_batt_capacity(&batt_status);
+            generate_new_log_address(&st_LogAddr);
+
             sys_timer = osal_GetSystemClock();
             excute_timer = osal_GetSystemClock();
 
@@ -170,6 +177,7 @@ uint16 Factory_Init_Process(uint8 task_id, uint16 events)
     uint16 calib_value;
 
     flash_8bit_t conn_type;
+
     float f_batt_v;
 
     if (ctrl_flags.factory_setup) {
@@ -185,11 +193,15 @@ uint16 Factory_Init_Process(uint8 task_id, uint16 events)
                 //배터리 전압감지, 기준전압(3.7V)으로 판단하며 reference-calibration실행
                 calib_value = stored_adc_calib(read_adc_sampling(10,READ_BATT_SIDE));
                 setup_calib_value(FALSE, calib_value);
+
                 ctrl_flags.ref_calib = 1;
             }
         } else {
             read_flash(FLADDR_CONNTYPE, FLOPT_UINT32, &conn_type.all_bits);
-            if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x04) {
+            //debug: auto setup
+            if (conn_type.byte_1 == 0xFF) {
+                stored_conn_type(CONN_USB_C);
+            } else if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x04) {
                 //connector type setup ok.
                 ctrl_flags.factory_setup = 0;
             }
@@ -222,6 +234,8 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     uint16 next_interval = 10;
     uint16 next_evt;
 
+    uint8 debug_val;
+
     next_evt = events;
     next_task = task_id;
 
@@ -231,6 +245,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
             //certification success, enable dischg state
             next_evt &= ~(EVT_CERTIFICATION);
             next_evt |= EVT_DISCHARGE;
+            ctrl_flags.serv_en = 1;
         }
     }
 
@@ -239,6 +254,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
             discharge_disable();
             next_evt &= ~(EVT_DISCHARGE);
         }else {
+            //print_uart("DISCHG-%d\r\n", ctrl_flags.use_conn);
             ctrl_flags.use_conn = detect_use_cable();
             if(ctrl_flags.use_conn) {
                 discharge_enable(DISCHG_BLZ_CONN);
@@ -251,18 +267,34 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     if (events & EVT_MORNITORING) {
         if (check_timer(excute_timer, 1000)) {
             //get the battery status information(voltage, current, capacity)
-            get_batt_status(&batt_status);  
+            get_batt_status(&batt_status);
+            // print_uart("%.2f[V], ", batt_status.batt_v);
+            // print_uart("%d[mA], ",batt_status.current);
+            print_uart("%.2f[mWh]\r\n",batt_status.left_cap);
 
-            //battery service excute RTC
-            st_BattLog.time_info.time_stamp++;
+           // //battery service excute RTC
+            st_Times.time_info.time_stamp++;
 
             //check battery voltage
             if (batt_status.batt_v <= SERVICE_BATT_V) {
                 ctrl_flags.serv_en = 0;
             }
+
+            /* DEBUG Codes */
+            if(!(st_Times.time_info.time_stamp % 10)) {
+                st_BattLog.evt_info.state = (EVT_USER_SERVICE & 0xFF);
+                st_BattLog.evt_info.log_value = (uint16)(batt_status.batt_v * 1000);
+                st_BattLog.evt_info.voltage = 1;
+                write_flash(st_LogAddr.offset_addr, &st_BattLog.source_data);
+                st_LogAddr.offset_addr++;
+                if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
+                    st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
+                }
+            }
+
             excute_timer = osal_GetSystemClock();
         }
-        //read temperature sensor
+        // //read temperature sensor
         sensor_vals.temperature = read_temperature();
         if(sensor_vals.temperature >= 70) {
             
@@ -271,7 +303,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
         if (!VIB_SENSOR) {
             sensor_vals.impact_cnt++;
             if(sensor_vals.impact_cnt >= 30) {
-
+                sensor_vals.impact_cnt = 0;
             }
         }
 
@@ -287,7 +319,15 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
         //todo: logging current status
     }
 
-    print_uart("EVT-%#04X\r\n", next_evt);
+    SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &debug_val);
+    if(debug_val & 0x80) {
+        debug_val &= ~(0x80);
+        // GAPRole_TerminateConnection();
+        // ble_advert_control(FALSE);
+        // VOID OADTarget_AddService();
+        // ble_advert_control(TRUE);
+    }
+
     osal_start_timerEx(next_task, next_evt, next_interval);
 
     return 0;
@@ -393,6 +433,12 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
     }
 
     osal_start_timerEx(next_task, next_evt, 10);
+
+    return 0;
+}
+
+uint16 Abnormaly_Process(uint8 task_id, uint16 events)
+{
 
     return 0;
 }

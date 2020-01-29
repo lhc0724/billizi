@@ -42,9 +42,9 @@ typedef union _ctrl_flag
 
 typedef struct _BATT_STATUS {
     float batt_v;
+    float left_cap; //unit is [mWh], maximum = 3.7 * 4800 = 17760[mWh]
     uint16 current;
     uint16 pwr_consum;
-    uint16 left_cap;
 }batt_info_t;
 
 typedef struct _SENSOR_STATUS {
@@ -53,6 +53,7 @@ typedef struct _SENSOR_STATUS {
 }sensor_info_t;
 
 static int16 calc_i2c_temperature(uint8 * i2c_data);
+void init_batt_capacity(batt_info_t *p_battStatus);
 
 int16 read_temperature();
 //uint8 check_cable_status();

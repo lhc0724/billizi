@@ -31,14 +31,19 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
             case 0x31:
-                EN_CONN_RETR = 1;
-                RETR_TEST_EN = 1;
+                print_uart("ADC_OPEN-BATT\r\n");
+                IO_ADC_INDUCTOR_SIDE = 0;
+                IO_ADC_BATT_SIDE = 1;
                 break;
             case 0x32:
-                EN_CONN_RETR = 0;
+                print_uart("ADC_OPEN-INDUT\r\n");
+                IO_ADC_BATT_SIDE = 0;
+                IO_ADC_INDUCTOR_SIDE = 1;
                 break;
             case 0x33:
-                RETR_TEST_EN = 0;
+                print_uart("ADC_CLOSE\r\n");
+                IO_ADC_BATT_SIDE = 0;
+                IO_ADC_INDUCTOR_SIDE = 0;
                 break;
         }
         rx_buff[rx_tail] = '\n';
@@ -134,7 +139,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
     comm_data[data_offset++] = load_flash_conntype();   //11
 
     //battery status data.
-    if (apst_flags->abnormal & 0x1F) {              //12
+    if (apst_flags->abnormal & 0x1F) {                  //12
         comm_data[data_offset++] = 0x01;
     } else {
         comm_data[data_offset++] = 0x02;

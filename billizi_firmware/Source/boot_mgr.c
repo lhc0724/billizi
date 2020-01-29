@@ -179,7 +179,6 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
         if(ctrl_flags.abnormal & 0x1F) {
             osal_set_event(get_main_taskID(), EVT_ABNORMAL_TASK);
         }else {
-            ctrl_flags.serv_en = 1;
             osal_set_event(get_main_taskID(), EVT_USER_SERVICE);
         }
         set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);

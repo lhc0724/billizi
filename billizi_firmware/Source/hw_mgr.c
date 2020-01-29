@@ -41,20 +41,29 @@ void sensor_status_init(sensor_info_t *p_sensor)
     p_sensor->temperature = 0;
 }
 
-void get_batt_status(batt_info_t *p_batt_status)
+void init_batt_capacity(batt_info_t *p_battStatus)
+{
+    float curr_cap;
+
+    curr_cap = MAX_BATT_V - MIN_BATT_V;
+    curr_cap = curr_cap * (MAX_BATT_V - read_voltage(READ_BATT_SIDE));
+    p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
+}
+
+void get_batt_status(batt_info_t *p_battStatus)
 {
     float f_tmpdata;
 
-    p_batt_status->batt_v = read_voltage(READ_BATT_SIDE);
-    p_batt_status->current = read_current(READ_CURR_DISCHG);
+    p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
+    p_battStatus->current = read_current(READ_CURR_DISCHG);
     
     //current power consumption [mW]
-    f_tmpdata = p_batt_status->batt_v * (p_batt_status->current);
+    f_tmpdata = p_battStatus->batt_v * (p_battStatus->current);
     
     //calc to electric power [mW/h]
     f_tmpdata = f_tmpdata/3600;
     
-    p_batt_status->left_cap -= (uint16)f_tmpdata;
+    p_battStatus->left_cap -= f_tmpdata;
 }
 
 int16 read_temperature()

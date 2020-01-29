@@ -2,6 +2,11 @@
 #include "serial_interface.h"
 #include "flash_interface.h"
 
+#if defined FEATURE_OAD
+  #include "oad.h"
+  #include "oad_target.h"
+#endif
+
 // GAP - ble scan response data (max size = 31 bytes)
 // BLE 스캔시 보이는 beacon data
 static uint8 res_data[B_MAX_ADV_LEN] = {
@@ -47,7 +52,7 @@ static simpleProfileCBs_t simple_profile_cb = {
     simpleProfileChangeCB  // Charactersitic value change callback
 };
 static simpleProfileCBs_t certifi_profile_cb = {
-    user_certification_cb  // Charactersitic value change callback
+    user_ble_communication_cb  // Charactersitic value change callback
 };
 
 /*********************************************************************
@@ -125,7 +130,7 @@ static void simpleProfileChangeCB(uint8 paramID) {
     }
 }
 
-static void user_certification_cb(uint8 paramID) {
+static void user_ble_communication_cb(uint8 paramID) {
     uint8 data_char3[20];
     uint8 data_char1;
 
@@ -141,6 +146,14 @@ static void user_certification_cb(uint8 paramID) {
                     data_char1 = 0x30;
                     print_uart("CMD_Certifi\r\n");
                     set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &data_char1);
+                    break;
+                case 0xB0A0:
+                    VOID OADTarget_AddService();
+                    GAPRole_TerminateConnection();
+                    break;
+                case 0xD0C0:
+                    OADTarget_DelService();
+                    GAPRole_TerminateConnection();
                     break;
             }
             break;
@@ -158,7 +171,6 @@ uint8 check_certification()
 {
     uint8 status;
     SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &status);
-    print_uart("%#X\r\n", status);
     if(status == 0x30) {
         //certification success.
         return 0;

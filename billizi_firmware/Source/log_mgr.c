@@ -3,9 +3,7 @@
 uint8 log_system_init(log_data_t *apst_log, log_addr_t *apst_addr) 
 {
     //log data structure initialize
-    apst_log->evt_info.event_datas = 0;
-    apst_log->time_info.time_datas = 0;
-    apst_log->time_info.time_header = TIME_HEAD;
+    apst_log->source_data = 0;
 
     //log address information structure initialize
     apst_addr->key_addr = 0;
@@ -165,4 +163,24 @@ uint16 calc_number_of_LogDatas(log_addr_t *apst_addr)
     }
 
     return log_cnt/8;
+}
+
+void generate_new_log_address(log_addr_t *apst_addr)
+{
+    apst_addr->key_addr = 0;
+    apst_addr->log_cnt = 0;
+
+    if (apst_addr->tail_addr != 0) {
+        if (apst_addr->tail_addr == FLADDR_LOGKEY_ED) {
+            apst_addr->head_addr = FLADDR_LOGDATA_ST;
+        } else {
+            apst_addr->head_addr = apst_addr->tail_addr + 1;
+        }
+        apst_addr->offset_addr = apst_addr->head_addr;
+    } else {
+        apst_addr->head_addr = FLADDR_LOGDATA_ST;
+        apst_addr->offset_addr = apst_addr->head_addr;
+    }
+
+    apst_addr->tail_addr = 0;
 }
