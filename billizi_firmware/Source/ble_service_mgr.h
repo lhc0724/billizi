@@ -61,7 +61,7 @@
 
 /* local functions */
 static void peripheralStateNotificationCB(gaprole_States_t newState);
-static void simpleProfileChangeCB(uint8 paramID);
+static void sys_prof_change_cb(uint8 paramID);
 static void user_ble_communication_cb(uint8 paramID);
 
 void setup_app_register_cb(uint8 opt);

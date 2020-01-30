@@ -187,7 +187,7 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     data_offset += sizeof(uint16);
 
     //state machine information
-    comm_data[data_offset++] = batt_log.evt_info.state; //7
+    comm_data[data_offset++] = batt_log.evt_info.log_header; //7
 
     apst_addr->offset_addr++;
     if (apst_addr->offset_addr > FLADDR_LOGDATA_ED) {

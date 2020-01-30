@@ -17,7 +17,7 @@ uint8 *tx_buff;
 Control_flag_t ctrl_flags;
 
 static log_data_t st_BattLog;
-static log_data_t st_Times;
+static time_data_t st_Times;
 static log_addr_t st_LogAddr;
 
 static uint32 sys_timer;
@@ -91,7 +91,9 @@ void Billizi_Process_Init(uint8 task_id)
     HCI_EXT_HaltDuringRfCmd(HCI_EXT_HALT_DURING_RF_DISABLE);
 
     log_system_init(&st_BattLog, &st_LogAddr);
-    st_Times.time_info.time_datas = 0;
+    st_Times.head_data = LOG_HEAD_TIME;
+    st_Times.time_value = 0;
+
     sensor_status_init(&sensor_vals);
     batt_status.left_cap = BATT_CAPACITY;
     ctrl_flags.flag_all = 0;
@@ -130,13 +132,17 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         if(ctrl_flags.need_comm && st_LogAddr.head_addr >= FLADDR_LOGDATA_ST) {
             osal_set_event(main_taskID, EVT_KIOSK_PROCESS);
         }else {
-            //todo: get new log address
             OADTarget_DelService();
             ble_advert_control(TRUE);
             ctrl_flags.certification = 1;
 
+            //배터리 잔량 초기 측정
             init_batt_capacity(&batt_status);
+            print_uart("%.2f[V] | %.2f[mWh]", batt_status.batt_v, batt_status.left_cap);
+
+            //사용할 로그 주소 새로 발급
             generate_new_log_address(&st_LogAddr);
+            init_flash_mems(st_LogAddr.head_addr);
 
             sys_timer = osal_GetSystemClock();
             excute_timer = osal_GetSystemClock();
@@ -273,7 +279,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
             print_uart("%.2f[mWh]\r\n",batt_status.left_cap);
 
            // //battery service excute RTC
-            st_Times.time_info.time_stamp++;
+            st_Times.time_value++;
 
             //check battery voltage
             if (batt_status.batt_v <= SERVICE_BATT_V) {
@@ -282,11 +288,12 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
 
             /* DEBUG Codes */
             if(!(st_Times.time_info.time_stamp % 10)) {
-                st_BattLog.evt_info.state = (EVT_USER_SERVICE & 0xFF);
-                st_BattLog.evt_info.log_value = (uint16)(batt_status.batt_v * 1000);
-                st_BattLog.evt_info.voltage = 1;
-                write_flash(st_LogAddr.offset_addr, &st_BattLog.source_data);
-                st_LogAddr.offset_addr++;
+                st_BattLog.head_data = LOG_HEAD_EN_SERV;
+                st_BattLog.log_value = (uint16)(batt_status.batt_v * 1000);
+                st_BattLog.voltage = 1;
+
+                stored_log_data(&st_LogAddr, &st_BattLog);
+
                 if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
                     st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
                 }

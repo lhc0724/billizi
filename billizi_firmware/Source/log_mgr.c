@@ -87,7 +87,7 @@ uint16 check_key_log(uint16 keylog_addr, Control_flag_t *apst_flags)
         return search_head_log(keylog_addr);
     }
 
-    if(tmp_log.evt_info.state == 0x08) {
+    if(tmp_log.evt_info.log_header == LOG_HEAD_ABNORMAL) {
         //0x08 is abnormal state
         apst_flags->abnormal = 1;
     }
@@ -115,7 +115,8 @@ uint16 search_head_log(uint16 offset)
 
     while (tmp_addr != offset) {
         read_flash(tmp_addr, FLOPT_UINT32, &tmp_log.evt_info);
-        if(tmp_log.evt_info.head_flag) {
+        //시간데이터로 저장된 로그는 필터링
+        if (tmp_log.evt_info.log_header & 0x0F && tmp_log.evt_info.head_flag) {
             break;
         }else {
             tmp_addr--;
@@ -176,11 +177,34 @@ void generate_new_log_address(log_addr_t *apst_addr)
         } else {
             apst_addr->head_addr = apst_addr->tail_addr + 1;
         }
-        apst_addr->offset_addr = apst_addr->head_addr;
     } else {
         apst_addr->head_addr = FLADDR_LOGDATA_ST;
-        apst_addr->offset_addr = apst_addr->head_addr;
     }
 
+    apst_addr->offset_addr = apst_addr->head_addr;
     apst_addr->tail_addr = 0;
+}
+
+uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data)
+{
+    uint32 tmp_flash;
+
+    if(apst_addr->offset_addr == apst_addr->head_addr) {
+        apst_data->evt_info.head_flag = 1;
+    }
+    write_flash(apst_addr->offset_addr, &(apst_data->source_data));
+
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
+    if(apst_data->source_data != tmp_flash) {
+        //로그 기록 실패
+        return 1;
+    }
+
+    //기록 성공시 offset address 증가
+    apst_addr->offset_addr++;
+    if(apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
+        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
+    }
+
+    return 0;
 }

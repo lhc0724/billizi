@@ -48,10 +48,10 @@ static gapRolesCBs_t billizi_peripheral_cbs = {
     NULL                            // When a valid RSSI is read from controller (not used by application)
 };
 // Simple GATT Profile Callbacks
-static simpleProfileCBs_t simple_profile_cb = {
-    simpleProfileChangeCB  // Charactersitic value change callback
+static simpleProfileCBs_t factory_profile_cb = {
+    sys_prof_change_cb  // Charactersitic value change callback
 };
-static simpleProfileCBs_t certifi_profile_cb = {
+static simpleProfileCBs_t app_comm_profile_cb = {
     user_ble_communication_cb  // Charactersitic value change callback
 };
 
@@ -77,7 +77,7 @@ static void peripheralStateNotificationCB(gaprole_States_t newState)
 }
 
 /*********************************************************************
- * @fn      simpleProfileChangeCB
+ * @fn      sys_prof_change_cb
  *
  * @brief   Callback from SimpleBLEProfile indicating a value change
  *
@@ -85,7 +85,8 @@ static void peripheralStateNotificationCB(gaprole_States_t newState)
  *
  * @return  none
  */
-static void simpleProfileChangeCB(uint8 paramID) {
+static void sys_prof_change_cb(uint8 paramID) 
+{
     uint8 data_char3[20];
     uint8 data_char1;
 
@@ -302,10 +303,10 @@ void setup_app_register_cb(uint8 opt)
     uint8 init_chars;
     switch(opt) {
         case APP_FACTORY_INIT:
-            VOID SimpleProfile_RegisterAppCBs(&simple_profile_cb);
+            VOID SimpleProfile_RegisterAppCBs(&factory_profile_cb);
             break;
         case APP_USER_COMM:
-            VOID SimpleProfile_RegisterAppCBs(&certifi_profile_cb);
+            VOID SimpleProfile_RegisterAppCBs(&app_comm_profile_cb);
             init_chars = 0;
             set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &init_chars);
             break;

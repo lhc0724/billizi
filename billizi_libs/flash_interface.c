@@ -108,6 +108,19 @@ uint8 load_flash_conntype()
     return conn_type.byte_1;
 }
 
+void init_flash_mems(uint16 ai_addr)
+{
+    uint8 pg;
+    uint32 flash_val;
+
+    pg = ADDR_2_PAGE(ai_addr);
+    read_flash(ai_addr, FLOPT_UINT32, &flash_val);
+    if(flash_val != EMPTY_FLASH) {
+        HalFlashErase(pg);
+    }
+
+}
+
 void erase_flash_range(uint16 st_addr, uint16 end_addr)
 {
     uint8 offset_pg, end_pg;

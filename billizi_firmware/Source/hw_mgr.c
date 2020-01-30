@@ -45,8 +45,10 @@ void init_batt_capacity(batt_info_t *p_battStatus)
 {
     float curr_cap;
 
+    p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
+
     curr_cap = MAX_BATT_V - MIN_BATT_V;
-    curr_cap = curr_cap * (MAX_BATT_V - read_voltage(READ_BATT_SIDE));
+    curr_cap = curr_cap * (MAX_BATT_V - p_battStatus->batt_v);
     p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
 }
 
