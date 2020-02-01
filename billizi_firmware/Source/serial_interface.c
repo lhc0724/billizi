@@ -31,12 +31,24 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
             case 0x31:
-                osal_set_event(get_main_taskID(), DEBUG|DBG_EVT_A);
-            break;
+                print_uart("ADC_OPEN-BATT\r\n");
+                IO_ADC_INDUCTOR_SIDE = 0;
+                IO_ADC_BATT_SIDE = 1;
+                break;
+            case 0x32:
+                print_uart("ADC_OPEN-INDUT\r\n");
+                IO_ADC_BATT_SIDE = 0;
+                IO_ADC_INDUCTOR_SIDE = 1;
+                break;
+            case 0x33:
+                print_uart("ADC_CLOSE\r\n");
+                IO_ADC_BATT_SIDE = 0;
+                IO_ADC_INDUCTOR_SIDE = 0;
+                break;
         }
         rx_buff[rx_tail] = '\n';
+
         transmit_comm_data(rx_tail, rx_buff);
-        //print_uart("%s\r\n", rx_buff);
         osal_memset(rx_buff, 0, RX_BUFF_SIZE);
         rx_tail = 0;
     }
@@ -103,13 +115,23 @@ void print_uart(char *tx_data, ...)
     }
 }
 
+void print_hex(uint8 *tx_buff, uint8 size)
+{
+    uint8 i;
+    
+    for(i = 0; i < size; i++) {
+        print_uart("0x%02X ", tx_buff[i]);
+    }
+    print_uart("\r\n");
+}
+
 uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus, uint16 log_cnt)
 {
     uint8 *comm_data;
     uint8 data_offset = 0;
     uint16 ui16_tmpdata;
 
-    comm_data = osal_mem_alloc(sizeof(uint8) * 17);
+    comm_data = osal_mem_alloc(sizeof(uint8) * 18);
 
     comm_data[data_offset++] = HEADER_INFO;         //1
     comm_data[data_offset++] = FIRMWARE_VERSION;    //2
@@ -127,7 +149,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
     comm_data[data_offset++] = load_flash_conntype();   //11
 
     //battery status data.
-    if (apst_flags->abnormal & 0x1F) {              //12
+    if (apst_flags->abnormal & 0x1F) {                  //12
         comm_data[data_offset++] = 0x01;
     } else {
         comm_data[data_offset++] = 0x02;
@@ -144,6 +166,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
 
     //packet length
     comm_data[data_offset] = data_offset;           //17
+    comm_data[data_offset+1] = '\0';             //NULL Point
 
     return comm_data;
 }   
@@ -155,9 +178,10 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     uint8 *data_type;
 
     log_data_t batt_log;
+    time_data_t time_stamp;
 
-    comm_data = osal_mem_alloc(sizeof(uint8) * 11);
-    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &batt_log.source_data);
+    comm_data = osal_mem_alloc(sizeof(uint8) * 12);
+    read_flash(apst_addr->offset_addr-2, FLOPT_UINT32, &batt_log.data_all);
 
     comm_data[data_offset++] = HEADER_LOG;  //1
 
@@ -167,15 +191,15 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     data_offset += sizeof(uint16);
     
     //log value type
-    data_type = (uint8*)&batt_log.evt_info.event_datas;     //4
-    comm_data[data_offset++] = (data_type[3] & 0x1F); 
+    data_type = (uint8*)&batt_log.data_all;     //4
+    comm_data[data_offset++] = (data_type[3] & 0x0F); 
     
     //log value(sensor, voltage, current, etc..)
-    VOID osal_memcpy(comm_data+data_offset, (uint8*)batt_log.evt_info.log_value, sizeof(uint16));  //6
+    VOID osal_memcpy(comm_data+data_offset, (uint8*)batt_log.log_value, sizeof(uint16));  //6
     data_offset += sizeof(uint16);
 
     //state machine information
-    comm_data[data_offset++] = batt_log.evt_info.state; //7
+    comm_data[data_offset++] = batt_log.head_data; //7
 
     apst_addr->offset_addr++;
     if (apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
@@ -183,12 +207,14 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     }
 
     //time stamp
-    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &batt_log.source_data);
-    VOID osal_memcpy(comm_data + data_offset, (uint8*)batt_log.time_info.time_stamp, sizeof(uint8) * 3);  //10
+    read_flash(apst_addr->offset_addr-1, FLOPT_UINT32, &time_stamp.data_all);
+    print_uart("time-%04X\r\n", time_stamp.time_value);
+    VOID osal_memcpy(comm_data + data_offset, (uint8*)time_stamp.time_value, sizeof(uint8) * 3);  //10
     data_offset += 3;
 
     //packet length
-    comm_data[data_offset] = data_offset;
+    comm_data[data_offset] = data_offset;   //11
+    comm_data[data_offset+1] = '\0';
 
     return comm_data;
 }

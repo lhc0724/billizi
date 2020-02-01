@@ -74,39 +74,45 @@ typedef enum FLASH_VARIABLE_OPT {
 }eFlash_Var_t;
 
 typedef enum _CONNECTOR_TYPE {
-    CONN_MICRO_5 = 0x01, CONN_LIGHTING, CONN_USB_C
-}eConnType_t;
+    CONN_MICRO_5  = 0x01,
+    CONN_LIGHTING = 0x02,
+    CONN_USB_C    = 0x04
+} eConnType_t;
 
-typedef union _FLASH_DATA {
-    union _EVENTS {
-        struct {
-            uint8 state : 8;         //8 bit
-            uint16 log_value : 16;   //24 bit
+typedef union _LOG_DATAS {
+    struct {
+        uint8 head_data : 8;   //8 bit
+        uint16 log_value : 16;  //24 bit
 
-            //log type flag
-            uint8 head_flag : 1;
-            uint8 key_flag : 1;
-            uint8 clc_flag : 1;     //clc: charge line communication
+        /**************
+         * log type flag
+         * 00: normal log
+         * 01: head log
+         * 10: key log
+         * 11: invalid log type
+         */
+        uint8 log_type : 2;     
 
-            //log data type
-            uint8 impact : 1;
-            uint8 cable_brk : 1;    //32 bit
-            uint8 voltage : 1;
-            uint8 temp : 1;         
-            uint8 discharge : 1;
-        };
-        uint32 event_datas;
-    } evt_info;  //total 32bit
+        //batt status flag
+        uint8 clc_flag : 1;     //clc: charge line communication
+        uint8 cable_brk : 1;    //28 bit
 
-    union _TIMES {
-        struct {
-            uint8 time_header : 8;
-            uint32 time_stamp : 24;
-        };
-        uint32 time_datas;
-    } time_info;
-    uint32 source_data;
+        //log data type
+        uint8 impact : 1;       
+        uint8 voltage : 1;
+        uint8 current : 1;
+        uint8 temp : 1;         //32 bit
+    };
+    uint32 data_all;
 }log_data_t;
+
+typedef union _TIMES {
+    struct {
+        uint8 head_data : 8;    
+        uint32 time_value : 24; //timer unit: seconds
+    };
+    uint32 data_all;
+}time_data_t;
 
 typedef union _FLASH_TYPE16 {
     struct {
@@ -144,12 +150,15 @@ typedef struct _FLASH_ADDR {
 uint8 write_flash(uint16 ai_addr, void *p_value);
 void read_flash(uint16 ai_addr, eFlash_Var_t value_type, void *p_value);
 
-float load_flash_calib();
 
 uint8 stored_conn_type(eConnType_t ai_connType);
+uint16 stored_adc_calib(uint16 calib_ref);
 uint8 load_flash_conntype();
+float load_flash_calib();
 
 void erase_flash_range(uint16 st_addr, uint16 end_addr);
 void erase_flash_log_area();
+
+void init_flash_mems(uint16 ai_addr);
 
 #endif

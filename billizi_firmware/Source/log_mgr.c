@@ -3,9 +3,7 @@
 uint8 log_system_init(log_data_t *apst_log, log_addr_t *apst_addr) 
 {
     //log data structure initialize
-    apst_log->evt_info.event_datas = 0;
-    apst_log->time_info.time_datas = 0;
-    apst_log->time_info.time_header = TIME_HEAD;
+    apst_log->data_all = 0;
 
     //log address information structure initialize
     apst_addr->key_addr = 0;
@@ -80,24 +78,24 @@ uint16 check_key_log(uint16 keylog_addr, Control_flag_t *apst_flags)
     log_data_t tmp_log;
 
     //read keylog data
-    read_flash(keylog_addr, FLOPT_UINT32, &tmp_log.evt_info);
+    read_flash(keylog_addr, FLOPT_UINT32, &tmp_log);
 
-    if(!tmp_log.evt_info.key_flag) {
+    if(tmp_log.log_type != 0x02) {
         //key flag match error, this log is invalid.
         apst_flags->abnormal = 1;
         apst_flags->need_comm = 1;
         return search_head_log(keylog_addr);
     }
 
-    if(tmp_log.evt_info.state == 0x08) {
+    if(tmp_log.head_data == LOG_HEAD_ABNORMAL) {
         //0x08 is abnormal state
         apst_flags->abnormal = 1;
     }
 
-    if(tmp_log.evt_info.clc_flag) {
+    if(tmp_log.clc_flag) {
         /* clc flag is true, before not completed communication with kiosk. */
         apst_flags->need_comm = 1;
-        return tmp_log.evt_info.log_value;
+        return tmp_log.log_value;
     }
 
     //the key log status is normal.
@@ -116,8 +114,9 @@ uint16 search_head_log(uint16 offset)
     }
 
     while (tmp_addr != offset) {
-        read_flash(tmp_addr, FLOPT_UINT32, &tmp_log.evt_info);
-        if(tmp_log.evt_info.head_flag) {
+        read_flash(tmp_addr, FLOPT_UINT32, &tmp_log);
+        //시간데이터로 저장된 로그는 필터링
+        if (tmp_log.head_data & 0x0F) {
             break;
         }else {
             tmp_addr--;
@@ -165,4 +164,59 @@ uint16 calc_number_of_LogDatas(log_addr_t *apst_addr)
     }
 
     return log_cnt/8;
+}
+
+void generate_new_log_address(log_addr_t *apst_addr)
+{
+    apst_addr->key_addr = 0;
+    apst_addr->log_cnt = 0;
+
+    if (apst_addr->tail_addr != 0) {
+        if (apst_addr->tail_addr == FLADDR_LOGKEY_ED) {
+            apst_addr->head_addr = FLADDR_LOGDATA_ST;
+        } else {
+            apst_addr->head_addr = apst_addr->tail_addr + 1;
+        }
+    } else {
+        apst_addr->head_addr = FLADDR_LOGDATA_ST;
+    }
+
+    apst_addr->offset_addr = apst_addr->head_addr;
+    apst_addr->tail_addr = 0;
+
+}
+
+uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t *apst_times)
+{
+    uint32 tmp_flash;
+
+    if(apst_addr->offset_addr == apst_addr->head_addr) {
+        apst_data->log_type = TYPE_HEAD_LOG;
+    }
+
+    write_flash(apst_addr->offset_addr, &(apst_data->data_all));
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
+    if(apst_data->data_all != tmp_flash) {
+        //로그 기록 실패
+        return 1;
+    }
+
+    apst_addr->offset_addr++;
+    if(apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
+        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
+    }
+
+    write_flash(apst_addr->offset_addr, &(apst_times->data_all));
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
+    if(apst_times->data_all != tmp_flash) {
+        //시간 기록 실패
+        return 1;
+    }
+
+    apst_addr->offset_addr++;
+    if(apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
+        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
+    }
+
+    return 0;
 }

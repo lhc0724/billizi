@@ -2,6 +2,11 @@
 #include "serial_interface.h"
 #include "flash_interface.h"
 
+#if defined FEATURE_OAD
+  #include "oad.h"
+  #include "oad_target.h"
+#endif
+
 // GAP - ble scan response data (max size = 31 bytes)
 // BLE 스캔시 보이는 beacon data
 static uint8 res_data[B_MAX_ADV_LEN] = {
@@ -43,11 +48,11 @@ static gapRolesCBs_t billizi_peripheral_cbs = {
     NULL                            // When a valid RSSI is read from controller (not used by application)
 };
 // Simple GATT Profile Callbacks
-static simpleProfileCBs_t simple_profile_cb = {
-    simpleProfileChangeCB  // Charactersitic value change callback
+static simpleProfileCBs_t factory_profile_cb = {
+    sys_prof_change_cb  // Charactersitic value change callback
 };
-static simpleProfileCBs_t certifi_profile_cb = {
-    user_certification_cb  // Charactersitic value change callback
+static simpleProfileCBs_t app_comm_profile_cb = {
+    user_ble_communication_cb  // Charactersitic value change callback
 };
 
 /*********************************************************************
@@ -72,7 +77,7 @@ static void peripheralStateNotificationCB(gaprole_States_t newState)
 }
 
 /*********************************************************************
- * @fn      simpleProfileChangeCB
+ * @fn      sys_prof_change_cb
  *
  * @brief   Callback from SimpleBLEProfile indicating a value change
  *
@@ -80,7 +85,8 @@ static void peripheralStateNotificationCB(gaprole_States_t newState)
  *
  * @return  none
  */
-static void simpleProfileChangeCB(uint8 paramID) {
+static void sys_prof_change_cb(uint8 paramID) 
+{
     uint8 data_char3[20];
     uint8 data_char1;
 
@@ -89,7 +95,7 @@ static void simpleProfileChangeCB(uint8 paramID) {
     switch (paramID) {
         case SIMPLEPROFILE_CHAR1:
             SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &data_char1);
-            if(data_char1 & 0x03) {
+            if(data_char1 & 0x07) {
                 if(!stored_conn_type((eConnType_t)data_char1)) {
             //        print_uart("ConnType - %d\r\n", data_char1);
                 }
@@ -125,7 +131,7 @@ static void simpleProfileChangeCB(uint8 paramID) {
     }
 }
 
-static void user_certification_cb(uint8 paramID) {
+static void user_ble_communication_cb(uint8 paramID) {
     uint8 data_char3[20];
     uint8 data_char1;
 
@@ -138,8 +144,17 @@ static void user_certification_cb(uint8 paramID) {
 
             switch(command) {
                 case 0xAAAA:
+                    data_char1 = 0x30;
                     print_uart("CMD_Certifi\r\n");
-                    set_simpleprofile(SIMPLEPROFILE_CHAR3, sizeof(uint16), (uint8*)&command);
+                    set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &data_char1);
+                    break;
+                case 0xB0A0:
+                    VOID OADTarget_AddService();
+                    GAPRole_TerminateConnection();
+                    break;
+                case 0xD0C0:
+                    OADTarget_DelService();
+                    GAPRole_TerminateConnection();
                     break;
             }
             break;
@@ -151,6 +166,18 @@ static void user_certification_cb(uint8 paramID) {
             // do nothing
             break;
     }
+}
+
+uint8 check_certification()
+{
+    uint8 status;
+    SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &status);
+    if(status == 0x30) {
+        //certification success.
+        return 0;
+    }
+
+    return 1;
 }
 
 // Setup the SimpleProfile Characteristic Values
@@ -273,12 +300,15 @@ void setup_simple_prof_service()
 
 void setup_app_register_cb(uint8 opt)
 {   
+    uint8 init_chars;
     switch(opt) {
         case APP_FACTORY_INIT:
-            VOID SimpleProfile_RegisterAppCBs(&simple_profile_cb);
+            VOID SimpleProfile_RegisterAppCBs(&factory_profile_cb);
             break;
         case APP_USER_COMM:
-            VOID SimpleProfile_RegisterAppCBs(&certifi_profile_cb);
+            VOID SimpleProfile_RegisterAppCBs(&app_comm_profile_cb);
+            init_chars = 0;
+            set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &init_chars);
             break;
     }
 }

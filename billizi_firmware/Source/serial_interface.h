@@ -42,5 +42,6 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
 uint8 *get_log_packet(log_addr_t *apst_addr);
 
 void uart_init(npiCBack_t npiCback);
+void print_hex(uint8 *tx_buff, uint8 size);
 
 #endif

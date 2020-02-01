@@ -61,8 +61,8 @@
 
 /* local functions */
 static void peripheralStateNotificationCB(gaprole_States_t newState);
-static void simpleProfileChangeCB(uint8 paramID);
-static void user_certification_cb(uint8 paramID);
+static void sys_prof_change_cb(uint8 paramID);
+static void user_ble_communication_cb(uint8 paramID);
 
 void setup_app_register_cb(uint8 opt);
 void ble_advert_control(uint8 en_opt);
@@ -75,5 +75,7 @@ void setup_gap_peripheral_profile();
 void setup_advert_interval();
 void setup_simple_prof_service();
 void GAPRole_Serv_Start();
+
+uint8 check_certification();
 
 #endif

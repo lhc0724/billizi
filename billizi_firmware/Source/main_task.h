@@ -73,5 +73,7 @@ extern void StateMachine_Process_init(uint8 task_id);
 extern uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events);
 extern uint16 Factory_Init_Process(uint8 task_id, uint16 events);
 extern uint16 User_Service_Process(uint8 task_id, uint16 events);
+extern uint16 Kiosk_Process(uint8 task_id, uint16 events);
+extern uint16 Abnormaly_Process(uint8 task_id, uint16 events);
 
 #endif

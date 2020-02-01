@@ -2,24 +2,38 @@
 #include "hal_i2c.h"
 
 
-uint8 check_cable_status()
-{
-    uint8 cable_status = 0; 
+// uint8 check_cable_status()
+// {
+//     uint8 cable_status = 0; 
 
-    RETR_TEST_EN = 1;
-    EN_CONN_RETR = 1;
-    
-    delay_us(100);
-    if(!RETR_CABLE_STATUS) {
-        //broken cable
-        cable_status = 1;
-    }
+//     //PMIC auto detect enable
+//     EN_CONN_RETR = 1;
+//     RETR_TEST_EN = 1;
 
-    RETR_TEST_EN = 0;
-    EN_CONN_RETR = 0;
+//     while(1) {
+//         if (!RETR_CABLE_STATUS) {
+//             break;
+//         }
+//     }
 
-    return cable_status;
-}
+//     EN_CONN_RETR = 0;
+//     delay_us(1000);
+
+//     while(1) {
+//         if (RETR_CABLE_STATUS) {
+//             cable_status = 1;
+//             break;
+//         }
+//     }
+//     if(RETR_CABLE_STATUS) {
+//         //cable check ok.
+//         cable_status = 1;
+//     }
+
+//     RETR_TEST_EN = 0;
+
+//     return cable_status;
+// }
 
 void sensor_status_init(sensor_info_t *p_sensor)
 {
@@ -27,20 +41,33 @@ void sensor_status_init(sensor_info_t *p_sensor)
     p_sensor->temperature = 0;
 }
 
-void get_batt_status(batt_info_t *p_batt_status)
+void init_batt_capacity(batt_info_t *p_battStatus)
+{
+    float curr_cap;
+
+    p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
+
+    curr_cap = MAX_BATT_V - MIN_BATT_V;
+    curr_cap = curr_cap - (MAX_BATT_V - p_battStatus->batt_v);
+    curr_cap *= 0.909091;   //1.1을 나누지 않고 역수로 곱함
+
+    p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
+}
+
+void get_batt_status(batt_info_t *p_battStatus)
 {
     float f_tmpdata;
 
-    p_batt_status->batt_v = read_voltage(READ_BATT_SIDE);
-    p_batt_status->current = read_current(READ_CURR_DISCHG);
+    p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
+    p_battStatus->current = read_current(READ_CURR_DISCHG);
     
     //current power consumption [mW]
-    f_tmpdata = p_batt_status->batt_v * (p_batt_status->current);
+    f_tmpdata = p_battStatus->batt_v * (p_battStatus->current);
     
     //calc to electric power [mW/h]
     f_tmpdata = f_tmpdata/3600;
     
-    p_batt_status->left_cap -= (uint16)f_tmpdata;
+    p_battStatus->left_cap -= f_tmpdata;
 }
 
 int16 read_temperature()

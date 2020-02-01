@@ -9,17 +9,17 @@ void get_gparam_calib(void *p_value)
     *((float *)p_value) = g_calib;
 }
 
-void setup_calib_value(uint8 self_calib, uint16 adc_ref)
+void setup_calib_value(uint8 calib_opt, uint16 calib_value)
 {   
     float adc_voltage;
 
-    adc_voltage = adc_ref * REF125_UNIT * BATT_RATIO_V;
-    if (self_calib) {
+    adc_voltage = calib_value * REF125_UNIT * BATT_RATIO_V;
+    if (calib_opt) {
         /* set self calibration */
-        g_calib = adc_voltage/MAX_BATT_V;    
+        g_calib = MAX_BATT_V/adc_voltage;    
     }else {
         /* set reference voltage calibration */
-        g_calib = adc_voltage/BATT_REF_V;    
+        g_calib = BATT_REF_V/adc_voltage;    
     }
 }
 
@@ -52,7 +52,7 @@ uint16 read_adc(adc_option_t adc_opt)
 uint16 read_adc_sampling(uint8 samp_cnt, adc_option_t adc_opt)
 {
     uint8 i;
-    uint32 adc_tmp;
+    uint32 adc_tmp = 0;
 
     open_adc_driver(adc_opt);
 
@@ -61,7 +61,9 @@ uint16 read_adc_sampling(uint8 samp_cnt, adc_option_t adc_opt)
     }
     close_adc_driver();
 
-    return adc_tmp/samp_cnt;
+    adc_tmp = adc_tmp/samp_cnt;
+
+    return (uint16)adc_tmp;
 }
 
 float read_voltage(adc_option_t adc_opt)
@@ -92,7 +94,7 @@ float read_voltage_sampling(uint8 samp_cnt, adc_option_t adc_opt)
 
 uint16 read_current(adc_option_t curr_direction) 
 {
-    float res_curr;
+    float res_curr = 0;
     uint16 adc_values[2];
 
     adc_values[0] = read_adc_sampling(2, READ_BATT_SIDE);
@@ -100,10 +102,14 @@ uint16 read_current(adc_option_t curr_direction)
 
     switch (curr_direction) {
         case READ_CURR_CHG: 
-            res_curr = adc_values[1] - adc_values[0];
+            if(adc_values[1] > adc_values[0]) {
+                res_curr = adc_values[1] - adc_values[0];
+            }
             break;
         case READ_CURR_DISCHG:
-            res_curr = adc_values[1] - adc_values[0];
+            if (adc_values[0] > adc_values[1]) {
+                res_curr = adc_values[0] - adc_values[1];
+            }
             break;
         default:
             //do nothing

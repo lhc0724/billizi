@@ -17,6 +17,7 @@ uint8 *tx_buff;
 Control_flag_t ctrl_flags;
 
 static log_data_t st_BattLog;
+static time_data_t st_Times;
 static log_addr_t st_LogAddr;
 
 static uint32 sys_timer;
@@ -79,10 +80,10 @@ void Billizi_Process_Init(uint8 task_id)
     setup_gap_gatt_service();
     setup_simple_prof_service();
 
-#if defined FEATURE_OAD
-    //Initialize OAD management attributes
-    VOID OADTarget_AddService();
-#endif
+// #if defined FEATURE_OAD
+//     //Initialize OAD management attributes
+//     VOID OADTarget_AddService();
+// #endif
 
     setup_advert_interval();
 
@@ -90,7 +91,11 @@ void Billizi_Process_Init(uint8 task_id)
     HCI_EXT_HaltDuringRfCmd(HCI_EXT_HALT_DURING_RF_DISABLE);
 
     log_system_init(&st_BattLog, &st_LogAddr);
+    st_Times.head_data = LOG_HEAD_TIME;
+    st_Times.time_value = 0;
+
     sensor_status_init(&sensor_vals);
+    batt_status.left_cap = BATT_CAPACITY;
     ctrl_flags.flag_all = 0;
 
     GAPRole_Serv_Start();
@@ -98,10 +103,10 @@ void Billizi_Process_Init(uint8 task_id)
 
 void StateMachine_Process_init(uint8 task_id)
 {
-    state_taskIDs[0] = task_id++;
-    state_taskIDs[1] = task_id++;
-    state_taskIDs[2] = task_id++;
-    state_taskIDs[3] = task_id;
+    state_taskIDs[TASK_FACTORY_INIT] = task_id++;
+    state_taskIDs[TASK_USER]         = task_id++;
+    state_taskIDs[TASK_KIOSK]        = task_id++;
+    state_taskIDs[TASK_ABNORMAL]     = task_id;
 }
 
 uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events) 
@@ -110,21 +115,11 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
     //uint16 next_interval = 50;
 
     if (events & EVT_FACTORY_INIT) {
-        // uint8 *pMAC;
-        // uint8 i;
-
-        // LL_ReadBDADDR(pMAC);
-        // print_uart("%X", pMAC[0]);
-        // for (i = 1; i < B_ADDR_LEN; i++) {
-        //     print_uart(":%X",pMAC[i]);
-        // }
-        // print_uart("\r\n");
-
+        VOID OADTarget_AddService();
         setup_app_register_cb(APP_FACTORY_INIT);
         ble_advert_control(TRUE);
-
+        
         erase_flash_log_area();
-
         osal_set_event(state_taskIDs[TASK_FACTORY_INIT], events);
     }
 
@@ -132,16 +127,23 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         setup_app_register_cb(APP_USER_COMM);
         
         ble_setup_rspData();
-        uart_disable();
+        //uart_disable();
 
         if(ctrl_flags.need_comm && st_LogAddr.head_addr >= FLADDR_LOGDATA_ST) {
             osal_set_event(main_taskID, EVT_KIOSK_PROCESS);
         }else {
-            //todo: get new log address
-
+            OADTarget_DelService();
             ble_advert_control(TRUE);
             ctrl_flags.certification = 1;
-            
+
+            //배터리 잔량 초기 측정
+            init_batt_capacity(&batt_status);
+            print_uart("%.2f[V] | %.2f[mWh]", batt_status.batt_v, batt_status.left_cap);
+
+            //사용할 로그 주소 새로 발급
+            generate_new_log_address(&st_LogAddr);
+            init_flash_mems(st_LogAddr.head_addr);
+
             sys_timer = osal_GetSystemClock();
             excute_timer = osal_GetSystemClock();
 
@@ -161,6 +163,12 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         osal_set_event(state_taskIDs[TASK_KIOSK], EVT_EXT_V_MONITORING);
     }
 
+    if (events & EVT_ABNORMAL_TASK) {
+        if(ctrl_flags.abnormal & ERR_BROKEN_CABLE) {
+        }
+        osal_set_event(main_taskID, EVT_ABNORMAL_TASK);
+    }
+
     if (events & DEBUG) {
         
     }
@@ -172,8 +180,10 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
 uint16 Factory_Init_Process(uint8 task_id, uint16 events) 
 {
     uint16 next_interval = 50;
-    flash_16bit_t calib_ref;
+    uint16 calib_value;
+
     flash_8bit_t conn_type;
+
     float f_batt_v;
 
     if (ctrl_flags.factory_setup) {
@@ -181,34 +191,23 @@ uint16 Factory_Init_Process(uint8 task_id, uint16 events)
         if (!ctrl_flags.ref_calib && !ctrl_flags.self_calib) {
             f_batt_v = read_voltage_sampling(10, READ_BATT_SIDE);
             if (f_batt_v <= 2) {
-                //No Detect Battery
-
-                calib_ref.all_bits = 0;
-                //set to calib_ref address value is 0, this battery system performs self-calibration.
-                write_flash(FLADDR_CALIB_REF, &calib_ref.all_bits);
-
-                /*******************
-                 * setup the initial calibration reference adc value
-                 * Maximum Voltage = 6885 * (1.25/8191) * 4 = 4.202784V
-                 */
-                calib_ref.high_16bit = 0xFFFF;
-                calib_ref.low_16bit = 6885;
-                write_flash(FLADDR_CALIB_SELF_ST, &calib_ref.all_bits);
-
-                setup_calib_value(TRUE, calib_ref.low_16bit);
+                //배터리 감지 안됨, self-calibration 모드
+                calib_value = stored_adc_calib(0);
+                setup_calib_value(TRUE, calib_value);
                 ctrl_flags.self_calib = 1;
             } else {
-                calib_ref.high_16bit = 0x1000;  //reference flag
-                calib_ref.low_16bit = read_adc_sampling(10, READ_BATT_SIDE);
-                write_flash(FLADDR_CALIB_REF, &calib_ref.all_bits);
+                //배터리 전압감지, 기준전압(3.7V)으로 판단하며 reference-calibration실행
+                calib_value = stored_adc_calib(read_adc_sampling(10,READ_BATT_SIDE));
+                setup_calib_value(FALSE, calib_value);
 
-                setup_calib_value(FALSE, calib_ref.low_16bit);
                 ctrl_flags.ref_calib = 1;
             }
         } else {
             read_flash(FLADDR_CONNTYPE, FLOPT_UINT32, &conn_type.all_bits);
-            //print_uart("%x\r\n", conn_type.byte_1);
-            if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x03) {
+            //debug: auto setup
+            if (conn_type.byte_1 == 0xFF) {
+                stored_conn_type(CONN_USB_C);
+            } else if (conn_type.byte_1 != 0xFF && conn_type.byte_1 <= 0x04) {
                 //connector type setup ok.
                 ctrl_flags.factory_setup = 0;
             }
@@ -245,10 +244,12 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     next_task = task_id;
 
     if (events & EVT_CERTIFICATION) {
+        ctrl_flags.certification = check_certification();
         if (!ctrl_flags.certification) {
             //certification success, enable dischg state
             next_evt &= ~(EVT_CERTIFICATION);
             next_evt |= EVT_DISCHARGE;
+            ctrl_flags.serv_en = 1;
         }
     }
 
@@ -257,6 +258,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
             discharge_disable();
             next_evt &= ~(EVT_DISCHARGE);
         }else {
+            //print_uart("DISCHG-%d\r\n", ctrl_flags.use_conn);
             ctrl_flags.use_conn = detect_use_cable();
             if(ctrl_flags.use_conn) {
                 discharge_enable(DISCHG_BLZ_CONN);
@@ -269,18 +271,40 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     if (events & EVT_MORNITORING) {
         if (check_timer(excute_timer, 1000)) {
             //get the battery status information(voltage, current, capacity)
-            get_batt_status(&batt_status);  
+            get_batt_status(&batt_status);
+            // print_uart("%.2f[V], ", batt_status.batt_v);
+            // print_uart("%d[mA], ",batt_status.current);
+            print_uart("%.2f[mWh]\r\n",batt_status.left_cap);
 
-            //battery service excute RTC
-            st_BattLog.time_info.time_stamp++;
+           // //battery service excute RTC
+            st_Times.time_value++;
 
             //check battery voltage
             if (batt_status.batt_v <= SERVICE_BATT_V) {
                 ctrl_flags.serv_en = 0;
             }
+
+            /* DEBUG Codes */
+            if(!(st_Times.time_value % 10)) {
+                st_BattLog.head_data = LOG_HEAD_EN_SERV;
+                st_BattLog.log_value = (uint16)(batt_status.batt_v * 1000);
+                st_BattLog.voltage = 1;
+
+                stored_log_data(&st_LogAddr, &st_BattLog, &st_Times);
+
+                tx_buff = get_log_packet(&st_LogAddr);
+                print_hex(tx_buff, 12);
+                osal_mem_free(tx_buff);
+
+                if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
+                    st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
+                }
+
+            }
+
             excute_timer = osal_GetSystemClock();
         }
-        //read temperature sensor
+        // //read temperature sensor
         sensor_vals.temperature = read_temperature();
         if(sensor_vals.temperature >= 70) {
             
@@ -289,7 +313,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
         if (!VIB_SENSOR) {
             sensor_vals.impact_cnt++;
             if(sensor_vals.impact_cnt >= 30) {
-
+                sensor_vals.impact_cnt = 0;
             }
         }
 
@@ -304,6 +328,7 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     if(ctrl_flags.logging) {
         //todo: logging current status
     }
+
     osal_start_timerEx(next_task, next_evt, next_interval);
 
     return 0;
@@ -409,6 +434,12 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
     }
 
     osal_start_timerEx(next_task, next_evt, 10);
+
+    return 0;
+}
+
+uint16 Abnormaly_Process(uint8 task_id, uint16 events)
+{
 
     return 0;
 }

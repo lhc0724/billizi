@@ -66,7 +66,9 @@ const pTaskEventHandlerFn tasksArr[] = {
     Billizi_BootMgr_ProcessEvent,  // task 11
     Billizi_Main_ProcessEvent,     // task 12
     Factory_Init_Process,
-    User_Service_Process
+    User_Service_Process,
+    Kiosk_Process,
+    Abnormaly_Process
 };
 
 const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
