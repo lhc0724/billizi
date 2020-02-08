@@ -54,7 +54,7 @@ void init_batt_capacity(batt_info_t *p_battStatus)
     p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
 }
 
-void get_batt_status(batt_info_t *p_battStatus)
+void battery_status_mornitoring(batt_info_t *p_battStatus)
 {
     float f_tmpdata;
 
@@ -84,7 +84,7 @@ int16 read_temperature()
 
 static int16 calc_i2c_temperature(uint8 * i2c_data)
 {
-    int16 res_temp;
+    int16 res_temp = 0;
     uint8 temp_level = 1;
     uint8 i;
 
@@ -110,3 +110,4 @@ static int16 calc_i2c_temperature(uint8 * i2c_data)
 
     return res_temp;
 }
+

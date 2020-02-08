@@ -17,7 +17,7 @@ uint8 log_system_init(log_data_t *apst_log, log_addr_t *apst_addr)
 
 uint8 LogAddress_valid_check(uint16 addr)
 {
-    if(addr < FLADDR_LOGDATA_ST || addr > FLADDR_LOGDATA_ED) {
+    if(addr < FLADDR_LOGDATA_ST || addr > FLADDR_LOGDATA_ED) {                                                                      
         return FALSE;
     }
     return TRUE;
@@ -41,22 +41,35 @@ uint16 get_key_address()
         key_addr--;
     }
 
-    // /* key address memory check */
-    // if(key_value.high_16bit == 0xFFFF) {
-    //     return key_addr;
-    // }else {
-    //     key_addr++;
-    //     /* if key address is over, key stored page erase and return first address of this page */
-    //     if(key_addr > FLADDR_LOGKEY_ED) {
-    //         HalFlashErase(ADDR_2_PAGE(FLADDR_LOGKEY_ST));
-    //         key_addr = FLADDR_LOGKEY_ST;
-    //     }
-    // }
+    if(key_addr < FLADDR_LOGKEY_ST) {
+        key_addr = FLADDR_LOGKEY_ST;
+    }
 
     return key_addr;
 }
 
-uint16 log_location_parser(uint16 key_addr)
+void stored_key_address(log_addr_t *apst_addr)
+{
+    uint16 key_addr;
+    flash_16bit_t key_value;
+
+    if(apst_addr->key_addr == 0) {
+        key_addr = FLADDR_LOGKEY_ST;
+    }else {
+        key_addr = apst_addr->key_addr;
+    }
+
+    read_flash(key_addr, FLOPT_UINT32, &key_value.all_bits);
+    if(key_value.low_16bit != 0xFFFF) {
+        key_value.high_16bit = apst_addr->tail_addr;
+    }else {
+        key_value.low_16bit = apst_addr->tail_addr;
+    }
+    
+    write_flash(key_addr, &key_value.all_bits);
+}
+
+uint16 analysis_keylog(uint16 key_addr)
 {
     flash_16bit_t key_value;
 
@@ -168,43 +181,95 @@ uint16 calc_number_of_LogDatas(log_addr_t *apst_addr)
 
 void generate_new_log_address(log_addr_t *apst_addr)
 {
-    apst_addr->key_addr = 0;
+    uint32 flash_vals;
+    log_data_t head_log;
+
+    //log counter value init
     apst_addr->log_cnt = 0;
 
-    if (apst_addr->tail_addr != 0) {
-        if (apst_addr->tail_addr == FLADDR_LOGKEY_ED) {
-            apst_addr->head_addr = FLADDR_LOGDATA_ST;
-        } else {
-            apst_addr->head_addr = apst_addr->tail_addr + 1;
-        }
-    } else {
+    if (apst_addr->head_addr == 0) {
+        //head log가 저장된 곳이 없을 때(첫 서비스)
         apst_addr->head_addr = FLADDR_LOGDATA_ST;
+    }else {
+        //이전 로그에 의해 head log가 존재할 때.
+        apst_addr->head_addr = LOGADDR_VALIDATION(apst_addr->tail_addr + 1);
     }
 
-    apst_addr->offset_addr = apst_addr->head_addr;
+    //tail log address init.
     apst_addr->tail_addr = 0;
+    //offset address init.
+    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->head_addr+1);
 
+    read_flash(apst_addr->head_addr, FLOPT_UINT32, &flash_vals);
+    if(flash_vals != EMPTY_FLASH) {
+        //새로 발급 받은 로그주소가 빈 공간이 아닐경우 초기화
+        HalFlashErase(ADDR_2_PAGE(apst_addr->head_addr));
+    }
+
+    head_log.data_all = EMPTY_FLASH;
+    head_log.log_type = TYPE_HEAD_LOG;
+
+    //기본 head log 저장
+    write_flash(apst_addr->head_addr, &head_log.data_all);
+}
+
+
+uint16 wrtie_tail_log(uint16 ai_addr, Control_flag_t ast_flag)
+{
+    log_data_t tail_log;
+
+    tail_log.log_value = ai_addr;
+    tail_log.log_type = TYPE_TAIL_LOG;
+    tail_log.clc_flag = 1;
+
+    tail_log.head_data = 0;
+
+    if(ast_flag.abnormal) {
+        tail_log.head_data |= LOG_HEAD_ABNORMAL;
+    }
+
+    if(ast_flag.serv_en) {
+        tail_log.head_data |= LOG_HEAD_EN_SERV;
+    }else { 
+        tail_log.head_data |= LOG_HEAD_NO_SERV;
+    }
+
+    if(write_flash(ai_addr, &tail_log.data_all)) {
+        //write error
+        return 0;
+    }
+    return ai_addr;
 }
 
 uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t *apst_times)
 {
     uint32 tmp_flash;
 
-    if(apst_addr->offset_addr == apst_addr->head_addr) {
-        apst_data->log_type = TYPE_HEAD_LOG;
+    uint16 offset_addr;
+    uint16 comp_addr;
+
+    offset_addr = apst_addr->offset_addr + 2;
+    comp_addr = offset_addr - PG_END_OFFSET;
+
+    //사용할 플레시의 페이지 넘김을 체크 
+    comp_addr &= 0xFF;
+    if (comp_addr >= 1) {
+        if (offset_addr > FLADDR_LOGDATA_ED) {
+            //마지막 주소값을 초과할 경우 첫 주소로 초기화
+            offset_addr = FLADDR_LOGDATA_ST + comp_addr - 1;
+        }
+        //새 페이지 플레시 초기화
+        HalFlashErase(ADDR_2_PAGE(offset_addr));
     }
 
     write_flash(apst_addr->offset_addr, &(apst_data->data_all));
     read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
-    if(apst_data->data_all != tmp_flash) {
+    if (apst_data->data_all != tmp_flash) {
         //로그 기록 실패
         return 1;
     }
 
-    apst_addr->offset_addr++;
-    if(apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
-        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
-    }
+    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 1);
 
     write_flash(apst_addr->offset_addr, &(apst_times->data_all));
     read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
@@ -213,10 +278,10 @@ uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t 
         return 1;
     }
 
-    apst_addr->offset_addr++;
-    if(apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
-        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
-    }
+    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 1);
+
+    //log write success, log data init
+    apst_data->data_all = 0;
 
     return 0;
 }

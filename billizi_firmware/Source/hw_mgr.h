@@ -11,7 +11,7 @@
 #define ERR_BROKEN_CABLE    0x01
 #define ERR_FLASH_MEMS      0x02
 #define ERR_TEMP_OVER       0x04
-#define ERR_IMPACT_OVER     0x08
+#define ERR_EXCEED_IMPACT_LIMIT     0x08
 #define ERR_LOSS_BATTERY    0x10
 #define ERR_COMMUNICATION   0x20
 
@@ -25,14 +25,12 @@ typedef union _ctrl_flag
         uint8 need_comm : 1;
         uint8 use_conn : 1;    
         uint8 logging : 1;
+        uint8 batt_dischg : 1;
 
         //factory init flag group
         uint8 factory_setup : 1;
         uint8 self_calib : 1;
         uint8 ref_calib : 1;    
-
-        //state flag group
-        uint8 trans_status : 1;  //change state flag.
 
         uint8 abnormal : 6;     
         //total 15 bits
@@ -59,6 +57,6 @@ int16 read_temperature();
 //uint8 check_cable_status();
 
 void sensor_status_init(sensor_info_t *p_sensor);
-void get_batt_status(batt_info_t *p_batt_status);
+void battery_status_mornitoring(batt_info_t *p_battStatus);
 
 #endif

@@ -26,7 +26,7 @@
 #define EVT_FACTORY_INIT         0x0001
 #define EVT_USER_SERVICE         0x0002
 #define EVT_KIOSK_PROCESS        0x0004
-#define EVT_ABNORMAL_TASK        0x0008
+#define EVT_ABNORMAL_PROCESS     0x0008
 
 /* billizi user service events */
 #define EVT_CERTIFICATION       0x0010    

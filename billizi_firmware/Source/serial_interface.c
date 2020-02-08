@@ -31,19 +31,11 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
             case 0x31:
-                print_uart("ADC_OPEN-BATT\r\n");
-                IO_ADC_INDUCTOR_SIDE = 0;
-                IO_ADC_BATT_SIDE = 1;
+
                 break;
             case 0x32:
-                print_uart("ADC_OPEN-INDUT\r\n");
-                IO_ADC_BATT_SIDE = 0;
-                IO_ADC_INDUCTOR_SIDE = 1;
                 break;
             case 0x33:
-                print_uart("ADC_CLOSE\r\n");
-                IO_ADC_BATT_SIDE = 0;
-                IO_ADC_INDUCTOR_SIDE = 0;
                 break;
         }
         rx_buff[rx_tail] = '\n';
@@ -150,13 +142,14 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
 
     //battery status data.
     if (apst_flags->abnormal & 0x1F) {                  //12
-        comm_data[data_offset++] = 0x01;
+        comm_data[data_offset++] = 0x01;        //abnormal
     } else {
-        comm_data[data_offset++] = 0x02;
+        comm_data[data_offset++] = 0x02;        //normaly
     }
 
     //current temperature data
     ui16_tmpdata = read_temperature();
+
     VOID osal_memcpy(comm_data + data_offset, (uint8*)&ui16_tmpdata, sizeof(uint16));   //14
     data_offset += sizeof(uint16);
 
@@ -175,7 +168,7 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
 {
     uint8 *comm_data;
     uint8 data_offset = 0;
-    uint8 *data_type;
+    uint8 *tmp_data;
 
     log_data_t batt_log;
     time_data_t time_stamp;
@@ -191,30 +184,33 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     data_offset += sizeof(uint16);
     
     //log value type
-    data_type = (uint8*)&batt_log.data_all;     //4
-    comm_data[data_offset++] = (data_type[3] & 0x0F); 
-    
+    tmp_data = (uint8*)&batt_log.data_all;     //4
+    comm_data[data_offset++] = (batt_log.head_data & 0x1F);
+
     //log value(sensor, voltage, current, etc..)
-    VOID osal_memcpy(comm_data+data_offset, (uint8*)batt_log.log_value, sizeof(uint16));  //6
-    data_offset += sizeof(uint16);
+    comm_data[data_offset++] = tmp_data[1];
+    comm_data[data_offset++] = tmp_data[2];
 
     //state machine information
     comm_data[data_offset++] = batt_log.head_data; //7
 
-    apst_addr->offset_addr++;
-    if (apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
-        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
-    }
-
     //time stamp
     read_flash(apst_addr->offset_addr-1, FLOPT_UINT32, &time_stamp.data_all);
-    print_uart("time-%04X\r\n", time_stamp.time_value);
-    VOID osal_memcpy(comm_data + data_offset, (uint8*)time_stamp.time_value, sizeof(uint8) * 3);  //10
-    data_offset += 3;
+    tmp_data = (uint8*)&time_stamp;
+    if(tmp_data[0] == LOG_HEAD_TIME) {
+        comm_data[data_offset++] = tmp_data[1];
+        comm_data[data_offset++] = tmp_data[2];
+        comm_data[data_offset++] = tmp_data[3];
+    }
 
     //packet length
     comm_data[data_offset] = data_offset;   //11
     comm_data[data_offset+1] = '\0';
+
+    apst_addr->offset_addr += 2;
+    if (apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
+        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
+    }
 
     return comm_data;
 }

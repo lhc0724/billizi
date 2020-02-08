@@ -16,9 +16,9 @@ static uint8 state_taskIDs[4];
 uint8 *tx_buff;
 Control_flag_t ctrl_flags;
 
-static log_data_t st_BattLog;
 static time_data_t st_Times;
 static log_addr_t st_LogAddr;
+static log_data_t st_BattLog;
 
 static uint32 sys_timer;
 static uint32 excute_timer;
@@ -67,6 +67,75 @@ void get_main_params(uint8 opt, void *pValue)
             *((Control_flag_t*)pValue) = ctrl_flags;
             break;
     }
+}
+
+uint8 set_log_data(uint16 status, uint16 log_value)
+{
+    if(ctrl_flags.logging) {
+        /* 아직 로그가 기록이 완료 되지 않은상태.
+         * 로그가 기록 될때까지 로그데이터가 덮어씌워짐을 방지 */
+        return 1;
+    }
+
+    st_BattLog.log_value = log_value;
+    st_BattLog.log_type = TYPE_NORMAL_LOG;
+
+    switch(status) {
+        case EVT_DISCHARGE:
+            if (ctrl_flags.batt_dischg) {
+                //방전시작
+                st_BattLog.head_data = LOG_HEAD_DISCHG_ST;
+                st_BattLog.current = 1;
+                return 1;
+            } else if (!ctrl_flags.batt_dischg) {
+                //방전종료
+                st_BattLog.head_data = LOG_HEAD_DISCHG_ED;
+                st_BattLog.current = 1;
+                return 1;
+            }
+            break;
+        case EVT_KIOSK_PROCESS:
+
+            if (ctrl_flags.serv_en) {
+                st_BattLog.head_data = LOG_HEAD_EN_SERV;
+            }else {
+                st_BattLog.head_data = LOG_HEAD_NO_SERV;
+            }
+
+            if (ctrl_flags.need_comm) {
+                st_BattLog.clc_flag = 1;
+                st_BattLog.log_type = TYPE_TAIL_LOG;
+            }
+
+            break;
+        case EVT_ABNORMAL_PROCESS:
+            st_BattLog.head_data = LOG_HEAD_ABNORMAL;
+
+            if (ctrl_flags.abnormal & ERR_EXCEED_IMPACT_LIMIT) {
+                ctrl_flags.abnormal &= ~(ERR_EXCEED_IMPACT_LIMIT);
+
+                st_BattLog.impact = 1;
+                return 1;
+            }
+
+            if (ctrl_flags.abnormal & ERR_TEMP_OVER) {
+                ctrl_flags.abnormal &= ~(ERR_TEMP_OVER);
+
+                st_BattLog.temp = 1;
+                return 1;
+            }
+
+            if (ctrl_flags.abnormal & ERR_BROKEN_CABLE) {
+                ctrl_flags.abnormal &= ~(ERR_BROKEN_CABLE);
+
+                st_BattLog.cable_brk = 1;
+                return 1;
+            }
+            break;
+    }
+
+   //기록할 로그가 없음.
+    return 0;
 }
 
 /***** OSAL SYSTEM FUNCTIONS *****/
@@ -130,6 +199,9 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         //uart_disable();
 
         if(ctrl_flags.need_comm && st_LogAddr.head_addr >= FLADDR_LOGDATA_ST) {
+            // print_uart("0x%04X - ", st_LogAddr.head_addr);
+            // print_uart("0x%04X\r\n", st_LogAddr.tail_addr);
+
             osal_set_event(main_taskID, EVT_KIOSK_PROCESS);
         }else {
             OADTarget_DelService();
@@ -138,13 +210,15 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
 
             //배터리 잔량 초기 측정
             init_batt_capacity(&batt_status);
-            print_uart("%.2f[V] | %.2f[mWh]", batt_status.batt_v, batt_status.left_cap);
+            print_uart("%.2f[V] | %.2f[mWh]\r\n", batt_status.batt_v, batt_status.left_cap);
 
             //사용할 로그 주소 새로 발급
             generate_new_log_address(&st_LogAddr);
+            //발급 주소 초기화
             init_flash_mems(st_LogAddr.head_addr);
 
-            sys_timer = osal_GetSystemClock();
+            //sys_timer = osal_GetSystemClock();
+            sys_timer = 0;
             excute_timer = osal_GetSystemClock();
 
             osal_set_event(state_taskIDs[TASK_USER], EVT_CERTIFICATION | EVT_MORNITORING);
@@ -157,16 +231,15 @@ uint16 Billizi_Main_ProcessEvent(uint8 task_id, uint16 events)
         // TXD_PIO = 1;
         uart_enable();
         excute_timer = 0;
-        st_LogAddr.offset_addr = 0;
+        st_LogAddr.offset_addr = st_LogAddr.head_addr;
         sys_timer = osal_GetSystemClock();
 
         osal_set_event(state_taskIDs[TASK_KIOSK], EVT_EXT_V_MONITORING);
     }
 
-    if (events & EVT_ABNORMAL_TASK) {
-        if(ctrl_flags.abnormal & ERR_BROKEN_CABLE) {
-        }
-        osal_set_event(main_taskID, EVT_ABNORMAL_TASK);
+    if (events & EVT_ABNORMAL_PROCESS) {
+        discharge_disable();
+        osal_set_event(main_taskID, EVT_ABNORMAL_PROCESS);
     }
 
     if (events & DEBUG) {
@@ -258,12 +331,19 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
             discharge_disable();
             next_evt &= ~(EVT_DISCHARGE);
         }else {
-            //print_uart("DISCHG-%d\r\n", ctrl_flags.use_conn);
             ctrl_flags.use_conn = detect_use_cable();
+            print_uart("conn-%d\r\n", ctrl_flags.use_conn);
             if(ctrl_flags.use_conn) {
                 discharge_enable(DISCHG_BLZ_CONN);
             }else {
                 discharge_enable(DISCHG_USB_A);
+            }
+
+            if(check_timer(sys_timer, 1500) && sys_timer != 0) {
+                if(!ctrl_flags.logging) {
+                    sys_timer = 0;
+                    ctrl_flags.logging = set_log_data(EVT_DISCHARGE, batt_status.current);
+                }
             }
         }
     }
@@ -271,12 +351,17 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
     if (events & EVT_MORNITORING) {
         if (check_timer(excute_timer, 1000)) {
             //get the battery status information(voltage, current, capacity)
-            get_batt_status(&batt_status);
-            // print_uart("%.2f[V], ", batt_status.batt_v);
-            // print_uart("%d[mA], ",batt_status.current);
-            print_uart("%.2f[mWh]\r\n",batt_status.left_cap);
+            battery_status_mornitoring(&batt_status);
 
-           // //battery service excute RTC
+            if(batt_status.current >= 200) {
+                ctrl_flags.batt_dischg = 1;
+                sys_timer = osal_GetSystemClock();
+            }else {
+                ctrl_flags.batt_dischg = 0;
+                sys_timer = osal_GetSystemClock();
+            }
+
+            //battery service excute RTC
             st_Times.time_value++;
 
             //check battery voltage
@@ -284,49 +369,45 @@ uint16 User_Service_Process(uint8 task_id, uint16 events)
                 ctrl_flags.serv_en = 0;
             }
 
-            /* DEBUG Codes */
-            if(!(st_Times.time_value % 10)) {
-                st_BattLog.head_data = LOG_HEAD_EN_SERV;
-                st_BattLog.log_value = (uint16)(batt_status.batt_v * 1000);
-                st_BattLog.voltage = 1;
-
-                stored_log_data(&st_LogAddr, &st_BattLog, &st_Times);
-
-                tx_buff = get_log_packet(&st_LogAddr);
-                print_hex(tx_buff, 12);
-                osal_mem_free(tx_buff);
-
-                if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
-                    st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
-                }
-
-            }
-
+            sensor_vals.impact_cnt = 0;
             excute_timer = osal_GetSystemClock();
         }
-        // //read temperature sensor
+
+        //read temperature sensor
         sensor_vals.temperature = read_temperature();
-        if(sensor_vals.temperature >= 70) {
-            
+        if(sensor_vals.temperature >= 700) {
+            ctrl_flags.abnormal = ERR_TEMP_OVER;
         }
 
         if (!VIB_SENSOR) {
             sensor_vals.impact_cnt++;
             if(sensor_vals.impact_cnt >= 30) {
-                sensor_vals.impact_cnt = 0;
+                ctrl_flags.abnormal = ERR_EXCEED_IMPACT_LIMIT;
             }
         }
 
         if (read_voltage(READ_EXT) >= EXT_MIN_V) {
             //returned battery to kiosk.
+
+            //print_uart("GO-KIOSK\r\n");
             ctrl_flags.need_comm = 1;
             next_task = main_taskID;
             next_evt = EVT_KIOSK_PROCESS;
+
+            set_log_data(next_evt, st_LogAddr.head_addr);
+            st_LogAddr.tail_addr = wrtie_tail_log(st_LogAddr.offset_addr, ctrl_flags);
+            stored_key_address(&st_LogAddr);
         }
     }
 
+    if(ctrl_flags.abnormal) {
+        next_task = main_taskID;
+        next_evt = EVT_ABNORMAL_PROCESS;
+    }
+    
     if(ctrl_flags.logging) {
-        //todo: logging current status
+        //todo: stored current log data
+        ctrl_flags.logging = stored_log_data(&st_LogAddr, &st_BattLog, &st_Times);
     }
 
     osal_start_timerEx(next_task, next_evt, next_interval);
@@ -348,90 +429,97 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
 
         if (check_timer(sys_timer, 100)) {
             //check the external voltage every interval 100ms
-            if (tmp_voltage < EXT_MIN_V && tmp_voltage >= EXT_COMM_V) {
-                //kiosk communication mode check ok.
-                next_evt = EVT_COMM;
-            } else if (tmp_voltage <= 1) {
-                //cannot be detected external voltage.
-                ctrl_flags.abnormal |= ERR_COMMUNICATION;
-                next_task = main_taskID;
-                next_evt = EVT_ABNORMAL_TASK;
-            }else {
-                //not communication mode, voltage is high.
-                excute_timer++;
-            }
+            //print_uart("%.2f\r\n", tmp_voltage);
             sys_timer = osal_GetSystemClock();
         }
-
-        if(excute_timer >= 100) {
-            //external voltage is unresponsive 10 seconds over.
-            ctrl_flags.abnormal |= ERR_COMMUNICATION;
-            excute_timer = 0;
-            next_task = main_taskID;
-            next_evt = EVT_ABNORMAL_TASK;
-        }
     }
 
-    if (events & EVT_COMM) {
-        if (tx_buff == NULL) {
-            if (st_LogAddr.offset_addr == 0) {
-                tx_buff = get_head_packet(&ctrl_flags, &batt_status, calc_number_of_LogDatas(&st_LogAddr));
-            }else {
-                tx_buff = get_log_packet(&st_LogAddr);
-            }
-        }
-        
-        transmit_data_stream(osal_strlen(tx_buff), tx_buff);
+    //         //check the external voltage every interval 100ms
+    //         if (tmp_voltage < EXT_MIN_V && tmp_voltage >= EXT_COMM_V) {
+    //             //kiosk communication mode check ok.
+    //             next_evt = EVT_COMM;
+    //         } else if (tmp_voltage <= 1) {
+    //             //cannot be detected external voltage.
+    //             ctrl_flags.abnormal |= ERR_COMMUNICATION;
+    //             next_task = main_taskID;
+    //             next_evt = EVT_ABNORMAL_PROCESS;
+    //         }else {
+    //             //not communication mode, voltage is high.
+    //             excute_timer++;
+    //         }
+    //         sys_timer = osal_GetSystemClock();
+    //     }
 
-        if (read_voltage(READ_EXT) >= EXT_MIN_V) {
-            if (st_LogAddr.offset_addr == st_LogAddr.tail_addr) {
-                //communication end. init log variables and transition charge state.
-                uart_disable();
-                charge_enable();
-                next_evt = EVT_CHARGE;
-            } else {
-                excute_timer = 0;
+    //     if(excute_timer >= 100) {
+    //         //external voltage is unresponsive 10 seconds over.
+    //         ctrl_flags.abnormal |= ERR_COMMUNICATION;
+    //         excute_timer = 0;
+    //         next_task = main_taskID;
+    //         next_evt = EVT_ABNORMAL_PROCESS;
+    //     }
+    // }
 
-                st_LogAddr.offset_addr++;
-                if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
-                    st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
-                }
+    // if (events & EVT_COMM) {
+    //     if (tx_buff == NULL) {
+    //         if (st_LogAddr.offset_addr == st_LogAddr.head_addr) {
+    //             tx_buff = get_head_packet(&ctrl_flags, &batt_status, calc_number_of_LogDatas(&st_LogAddr));
+    //         }else {
+    //             tx_buff = get_log_packet(&st_LogAddr);
+    //         }
+    //     }
 
-                sys_timer = osal_GetSystemClock();
-                next_evt = EVT_EXT_V_MONITORING;
-            }
-            osal_mem_free(tx_buff);
-            tx_buff = NULL;
-        }
-    }
+    //     print_hex(tx_buff, osal_strlen(tx_buff));
+    //     //transmit_data_stream(osal_strlen(tx_buff), tx_buff);
 
-    if (events & EVT_CHARGE) {
-        if (read_voltage(READ_EXT) < EXT_MIN_V) {
-            sys_timer = osal_GetSystemClock();
-            next_evt = EVT_HOLD_BATT;
-            charge_disable();
-        }
-    }
+    //     if (read_voltage(READ_EXT) >= EXT_MIN_V) {
+    //         if (st_LogAddr.offset_addr == st_LogAddr.tail_addr) {
+    //             //communication end. init log variables and transition charge state.
+    //             uart_disable();
+    //             charge_enable();
+    //             next_evt = EVT_CHARGE;
+    //         } else {
+    //             excute_timer = 0;
 
-    if (events & EVT_HOLD_BATT) {
-        if (check_timer(sys_timer, 200)) {
-            if (TXD_PIO) {
-                tmp_voltage = read_voltage(READ_EXT);
+    //             st_LogAddr.offset_addr++;
+    //             if (st_LogAddr.offset_addr > FLADDR_LOGDATA_ED) {
+    //                 st_LogAddr.offset_addr = FLADDR_LOGDATA_ST;
+    //             }
 
-                if (tmp_voltage >= 2 && tmp_voltage < EXT_COMM_V) {
-                    //request communication from kiosk
-                    next_evt = EVT_COMM;
-                } else if (tmp_voltage < 2) {
-                    //rented battery, service start.
-                    next_evt = EVT_USER_SERVICE;
-                    next_task = main_taskID;
-                }
-                TXD_PIO = 0;
-            } else {
-                TXD_PIO = 1;
-            }
-        }
-    }
+    //             sys_timer = osal_GetSystemClock();
+    //             next_evt = EVT_EXT_V_MONITORING;
+    //         }
+    //         osal_mem_free(tx_buff);
+    //         tx_buff = NULL;
+    //     }
+    // }
+
+    // if (events & EVT_CHARGE) {
+    //     if (read_voltage(READ_EXT) < EXT_MIN_V) {
+    //         sys_timer = osal_GetSystemClock();
+    //         next_evt = EVT_HOLD_BATT;
+    //         charge_disable();
+    //     }
+    // }
+
+    // if (events & EVT_HOLD_BATT) {
+    //     if (check_timer(sys_timer, 200)) {
+    //         if (TXD_PIO) {
+    //             tmp_voltage = read_voltage(READ_EXT);
+
+    //             if (tmp_voltage >= 2 && tmp_voltage < EXT_COMM_V) {
+    //                 //request communication from kiosk
+    //                 next_evt = EVT_COMM;
+    //             } else if (tmp_voltage < 2) {
+    //                 //rented battery, service start.
+    //                 next_evt = EVT_USER_SERVICE;
+    //                 next_task = main_taskID;
+    //             }
+    //             TXD_PIO = 0;
+    //         } else {
+    //             TXD_PIO = 1;
+    //         }
+    //     }
+    // }
 
     osal_start_timerEx(next_task, next_evt, 10);
 
@@ -440,6 +528,7 @@ uint16 Kiosk_Process(uint8 task_id, uint16 events)
 
 uint16 Abnormaly_Process(uint8 task_id, uint16 events)
 {
-
+    print_uart("Abnormal\r\n");
+    HAL_SYSTEM_RESET();
     return 0;
 }

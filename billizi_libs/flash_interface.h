@@ -30,7 +30,7 @@
 #define _32BIT_2_16BIT(__VA__) (uint16*)(&__VA__)
 #define _16BIT_2_32BIT(__VA__) *(uint32*)__VA__
 
-/**
+/***********************
  * @common:
  * FLADDR_MIN: 사용가능한 메모리 영역의 최소 주소값
  * FLADDR_LOGKEY: 마지막 로그 기록 위치를 저장하는 메모리영역
@@ -50,10 +50,10 @@
 #define FLADDR_CONNTYPE        0x1009
 
 #define FLADDR_LOGKEY_ST    0x1010
-#define FLADDR_LOGKEY_ED    0x11FE
+#define FLADDR_LOGKEY_ED    0x11FF
 
 #define FLADDR_LOGDATA_ST   0x1200  //9 Page
-#define FLADDR_LOGDATA_ED   0x8BFE  //69 Page
+#define FLADDR_LOGDATA_ED   0x8BFF  //69 Page
 #else 
 #define FLADDR_MIN        0x8E00    //71 Page
 #define FLADDR_CALIB      0x8E03
@@ -65,6 +65,14 @@
 #define FLADDR_LOGDATA_ST   0x9000  //72Page
 #define FLADDR_LOGDATA_ED   0xF5FE  //122 Page
 #endif
+
+/***********
+ * log addres range over validation check 
+ * this address range is over the max, return first log address.
+ * and valid address, return input address.
+ */
+#define LOGADDR_VALIDATION(address) (address>FLADDR_LOGDATA_ED)?FLADDR_LOGDATA_ST:address
+#define KEYADDR_VALIDATION(address) (address>FLADDR_LOGKEY_ED)?FLADDR_LOGKEY_ST:address
 
 typedef enum FLASH_VARIABLE_OPT {
     FLOPT_UINT8,
@@ -81,8 +89,8 @@ typedef enum _CONNECTOR_TYPE {
 
 typedef union _LOG_DATAS {
     struct {
-        uint8 head_data : 8;   //8 bit
-        uint16 log_value : 16;  //24 bit
+        uint8 head_data : 8;    //8 bit
+        uint16 log_value : 16;  //16 bit variable
 
         /**************
          * log type flag
@@ -91,20 +99,21 @@ typedef union _LOG_DATAS {
          * 10: key log
          * 11: invalid log type
          */
-        uint8 log_type : 2;     
+        uint8 log_type : 2;
 
         //batt status flag
-        uint8 clc_flag : 1;     //clc: charge line communication
-        uint8 cable_brk : 1;    //28 bit
+        uint8 clc_flag : 1;  //clc: charge line communication
+        uint8 cable_brk : 1;
 
         //log data type
-        uint8 impact : 1;       
+        uint8 impact : 1;
         uint8 voltage : 1;
         uint8 current : 1;
-        uint8 temp : 1;         //32 bit
+        uint8 temp : 1;
+        //total 32 bit
     };
     uint32 data_all;
-}log_data_t;
+} log_data_t;
 
 typedef union _TIMES {
     struct {

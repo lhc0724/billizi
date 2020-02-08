@@ -79,17 +79,23 @@ static uint8 previous_batt_status_check()
     log_data_t tmp_logdata;
     Control_flag_t ctrl_flag;
     
+    //마지막으로 저장된 키 로그의 주소를 가져옴
     latest_logAddr.key_addr = get_key_address();
 
-    if(latest_logAddr.key_addr < FLADDR_LOGKEY_ST) {
+    //키 로그의 값을 분석하여 tail log의 주소를 가져옴
+    latest_logAddr.tail_addr = analysis_keylog(latest_logAddr.key_addr);
+
+    if(latest_logAddr.tail_addr == 0 && latest_logAddr.key_addr == FLADDR_LOGKEY_ST) {
         //key address all empty.
         //this battery starts service for the first time.
         ctrl_flag.abnormal = 0;
+
+        latest_logAddr.head_addr = 0;
+        latest_logAddr.offset_addr = 0;
+        set_main_params(PARAM_LOGADDR, sizeof(log_addr_t), &latest_logAddr);
+
         return ctrl_flag.abnormal;
     }
-
-    //search to the key-log location.
-    latest_logAddr.tail_addr = log_location_parser(latest_logAddr.key_addr);
 
     if (!latest_logAddr.tail_addr) {
         //couldn't find the key-log location.
@@ -177,31 +183,14 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
         current_battery_status_check(&ctrl_flags);
         //print_uart("FLAGS-%#04X\r\n", ctrl_flags.flag_all);
         if(ctrl_flags.abnormal & 0x1F) {
-            osal_set_event(get_main_taskID(), EVT_ABNORMAL_TASK);
+            osal_set_event(get_main_taskID(), EVT_ABNORMAL_PROCESS);
         }else {
             osal_set_event(get_main_taskID(), EVT_USER_SERVICE);
         }
         set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);
 
         return 0;
-#if 0
-        keylog_addr.key_addr = get_key_address();
-        keylog_addr.tail_addr = log_location_parser(keylog_addr.key_addr);
 
-        if(keylog_addr.tail_addr == 0 && keylog_addr.key_addr == FLADDR_LOGKEY_ST) {
-            
-            main_addr.key_addr = keylog_addr.key_addr;
-            main_addr.head_addr = FLADDR_LOGDATA_ST;
-            main_addr.offset_addr = main_addr.head_addr;
-            main_addr.tail_addr = 0;
-
-        }else {
-            main_addr.head_addr = check_key_log(keylog_addr.tail_addr, &ctrl_flags);
-            if(ctrl_flags.need_comm) {
-                main_addr.tail_addr = keylog_addr.tail_addr;
-            }
-        }
-#endif
     }
 
     return 0; //task free
