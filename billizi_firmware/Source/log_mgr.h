@@ -32,6 +32,6 @@ flash_16bit_t search_self_calib();
 uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t *apst_times);
 uint16 wrtie_tail_log(uint16 ai_addr, Control_flag_t ast_flag);
 
-uint16 calc_number_of_LogDatas(log_addr_t *apst_addr);
+uint16 calc_number_of_LogDatas(log_addr_t ast_addr);
 
 #endif

@@ -50,23 +50,20 @@ uint16 get_key_address()
 
 void stored_key_address(log_addr_t *apst_addr)
 {
-    uint16 key_addr;
     flash_16bit_t key_value;
 
     if(apst_addr->key_addr == 0) {
-        key_addr = FLADDR_LOGKEY_ST;
-    }else {
-        key_addr = apst_addr->key_addr;
+        apst_addr->key_addr = FLADDR_LOGKEY_ST;
     }
 
-    read_flash(key_addr, FLOPT_UINT32, &key_value.all_bits);
+    read_flash(apst_addr->key_addr, FLOPT_UINT32, &key_value.all_bits);
     if(key_value.low_16bit != 0xFFFF) {
         key_value.high_16bit = apst_addr->tail_addr;
     }else {
         key_value.low_16bit = apst_addr->tail_addr;
     }
     
-    write_flash(key_addr, &key_value.all_bits);
+    write_flash(apst_addr->key_addr, &key_value.all_bits);
 }
 
 uint16 analysis_keylog(uint16 key_addr)
@@ -164,25 +161,28 @@ flash_16bit_t search_self_calib()
     return flash_value;   
 }
 
-uint16 calc_number_of_LogDatas(log_addr_t *apst_addr)
+uint16 calc_number_of_LogDatas(log_addr_t ast_addr)
 {
     uint16 log_cnt;
 
-    if (apst_addr->head_addr > apst_addr->tail_addr) {
+    if (ast_addr.head_addr > ast_addr.tail_addr) {
         //Log address after ring buffer rotation
-        log_cnt = FLADDR_LOGDATA_ED - apst_addr->head_addr;
-        log_cnt += apst_addr->tail_addr - FLADDR_LOGDATA_ST;
-    } else if (apst_addr->tail_addr > apst_addr->head_addr) {
-        log_cnt = apst_addr->tail_addr - apst_addr->head_addr;
+        log_cnt = FLADDR_LOGDATA_ED - ast_addr.head_addr;
+        log_cnt += ast_addr.tail_addr - FLADDR_LOGDATA_ST;
+    } else if (ast_addr.tail_addr > ast_addr.head_addr) {
+        log_cnt = ast_addr.tail_addr - ast_addr.head_addr;
     }
 
-    return log_cnt/8;
+    if(log_cnt > 1) {
+        return log_cnt/2;
+    }
+
+    return 0;
 }
 
 void generate_new_log_address(log_addr_t *apst_addr)
 {
     uint32 flash_vals;
-    log_data_t head_log;
 
     //log counter value init
     apst_addr->log_cnt = 0;
@@ -198,19 +198,14 @@ void generate_new_log_address(log_addr_t *apst_addr)
     //tail log address init.
     apst_addr->tail_addr = 0;
     //offset address init.
-    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->head_addr+1);
+    apst_addr->offset_addr = apst_addr->head_addr;
 
     read_flash(apst_addr->head_addr, FLOPT_UINT32, &flash_vals);
     if(flash_vals != EMPTY_FLASH) {
-        //새로 발급 받은 로그주소가 빈 공간이 아닐경우 초기화
+        //새로 발급 받은 로그주소가 빈 공간이 아닐경우 해당 페이지 초기화
         HalFlashErase(ADDR_2_PAGE(apst_addr->head_addr));
     }
 
-    head_log.data_all = EMPTY_FLASH;
-    head_log.log_type = TYPE_HEAD_LOG;
-
-    //기본 head log 저장
-    write_flash(apst_addr->head_addr, &head_log.data_all);
 }
 
 
@@ -249,14 +244,16 @@ uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t 
     uint16 comp_addr;
 
     offset_addr = apst_addr->offset_addr + 2;
-    comp_addr = offset_addr - PG_END_OFFSET;
 
     //사용할 플레시의 페이지 넘김을 체크 
+    comp_addr = offset_addr - PG_END_OFFSET;
     comp_addr &= 0xFF;
+
     if (comp_addr >= 1) {
         if (offset_addr > FLADDR_LOGDATA_ED) {
             //마지막 주소값을 초과할 경우 첫 주소로 초기화
-            offset_addr = FLADDR_LOGDATA_ST + comp_addr - 1;
+            //offset_addr = FLADDR_LOGDATA_ST + comp_addr - 1;
+            offset_addr = FLADDR_LOGDATA_ST;
         }
         //새 페이지 플레시 초기화
         HalFlashErase(ADDR_2_PAGE(offset_addr));

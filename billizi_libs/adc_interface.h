@@ -32,7 +32,7 @@
 
 /* BATT Device reference voltage */
 #define EXT_MIN_V   20
-#define EXT_COMM_V  14 
+#define EXT_COMM_V  8 
 #define MIN_BATT_V  (3.1)
 #define MAX_BATT_V  (4.2)
 #define SERVICE_BATT_V   (3.2)
@@ -56,6 +56,8 @@ uint16 read_adc_sampling(uint8 samp_cnt, adc_option_t adc_opt);
 float read_voltage(adc_option_t adc_opt);
 float read_voltage_sampling(uint8 samp_cnt, adc_option_t adc_opt);
 uint16 read_current(adc_option_t curr_direction);
+
+uint8 ext_voltage_analysis(float voltage);
 
 void open_adc_driver(adc_option_t adc_opt);
 void close_adc_driver();

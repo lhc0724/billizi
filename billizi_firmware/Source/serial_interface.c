@@ -173,8 +173,11 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     log_data_t batt_log;
     time_data_t time_stamp;
 
-    comm_data = osal_mem_alloc(sizeof(uint8) * 12);
-    read_flash(apst_addr->offset_addr-2, FLOPT_UINT32, &batt_log.data_all);
+    comm_data = osal_mem_alloc(sizeof(uint8) * 13);
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &batt_log.data_all);
+    print_uart("0x%04X, ", apst_addr->offset_addr);
+    print_uart("0x%08lX\r\n", batt_log.data_all);
+    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 1);
 
     comm_data[data_offset++] = HEADER_LOG;  //1
 
@@ -183,11 +186,14 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     VOID osal_memcpy(comm_data+data_offset, (uint8*)&apst_addr->log_cnt, sizeof(uint16));   //3
     data_offset += sizeof(uint16);
     
-    //log value type
+    //log type
     tmp_data = (uint8*)&batt_log.data_all;     //4
-    comm_data[data_offset++] = (batt_log.head_data & 0x1F);
+    comm_data[data_offset++] = batt_log.log_type;
 
-    //log value(sensor, voltage, current, etc..)
+    //data type
+    comm_data[data_offset++] = tmp_data[0];
+
+    //log value(sensor, voltage, current, etc..)k
     comm_data[data_offset++] = tmp_data[1];
     comm_data[data_offset++] = tmp_data[2];
 
@@ -195,7 +201,7 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     comm_data[data_offset++] = batt_log.head_data; //7
 
     //time stamp
-    read_flash(apst_addr->offset_addr-1, FLOPT_UINT32, &time_stamp.data_all);
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &time_stamp.data_all);
     tmp_data = (uint8*)&time_stamp;
     if(tmp_data[0] == LOG_HEAD_TIME) {
         comm_data[data_offset++] = tmp_data[1];
@@ -206,11 +212,6 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     //packet length
     comm_data[data_offset] = data_offset;   //11
     comm_data[data_offset+1] = '\0';
-
-    apst_addr->offset_addr += 2;
-    if (apst_addr->offset_addr > FLADDR_LOGDATA_ED) {
-        apst_addr->offset_addr = FLADDR_LOGDATA_ST;
-    }
 
     return comm_data;
 }

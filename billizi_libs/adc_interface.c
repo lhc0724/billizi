@@ -92,6 +92,17 @@ float read_voltage_sampling(uint8 samp_cnt, adc_option_t adc_opt)
     return f_voltage;
 }
 
+uint8 ext_voltage_analysis(float voltage)
+{
+    if (voltage >= EXT_MIN_V) {
+        return EXT_MIN_V;
+    } else if (voltage >= EXT_COMM_V) {
+        return EXT_COMM_V;
+    }
+
+    return 0;
+}
+
 uint16 read_current(adc_option_t curr_direction) 
 {
     float res_curr = 0;

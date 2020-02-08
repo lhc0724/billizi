@@ -36,8 +36,9 @@
 /* billizi kiosk events */
 #define EVT_EXT_V_MONITORING    0x0080
 #define EVT_COMM                0x0100
-#define EVT_CHARGE              0x0200
-#define EVT_HOLD_BATT           0x0400
+#define EVT_BATT_INFO_REQ       0x0200
+#define EVT_CHARGE              0x0400
+#define EVT_HOLD_BATT           0x0800
 
 #define DEBUG                    0x4000
 #define DBG_EVT_A                0x1000
