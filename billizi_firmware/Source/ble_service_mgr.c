@@ -170,14 +170,16 @@ static void user_ble_communication_cb(uint8 paramID) {
 
 uint8 check_certification()
 {
-    uint8 status;
-    SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &status);
-    if(status == 0x30) {
-        //certification success.
-        return 0;
-    }
+    return 0;
 
-    return 1;
+    // uint8 status;
+    // SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &status);
+    // if(status == 0x30) {
+    //     //certification success.
+    //     return 0;
+    // }
+
+    // return 1;
 }
 
 // Setup the SimpleProfile Characteristic Values

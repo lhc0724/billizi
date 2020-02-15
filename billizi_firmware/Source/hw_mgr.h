@@ -57,6 +57,6 @@ int16 read_temperature();
 //uint8 check_cable_status();
 
 void sensor_status_init(sensor_info_t *p_sensor);
-void battery_status_mornitoring(batt_info_t *p_battStatus);
+void battery_status_mornitoring(batt_info_t *p_battStatus, adc_option_t direction);
 
 #endif

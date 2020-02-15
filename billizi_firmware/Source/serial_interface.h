@@ -13,8 +13,8 @@
 
 #define RX_BUFF_SIZE    20
 #define INIT_LEN        8
-#define BATT_INFO_LEN   12
-#define BATT_LOG_LEN    17
+#define BATT_INFO_LEN   16
+#define BATT_LOG_LEN    11
 
 #define HEADER_INFO     0x10
 #define HEADER_LOG      0x20

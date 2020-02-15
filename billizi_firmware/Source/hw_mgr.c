@@ -54,20 +54,27 @@ void init_batt_capacity(batt_info_t *p_battStatus)
     p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
 }
 
-void battery_status_mornitoring(batt_info_t *p_battStatus)
+void battery_status_mornitoring(batt_info_t *p_battStatus, adc_option_t direction)
 {
     float f_tmpdata;
 
     p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
-    p_battStatus->current = read_current(READ_CURR_DISCHG);
-    
+    p_battStatus->current = read_current(direction);
+
     //current power consumption [mW]
     f_tmpdata = p_battStatus->batt_v * (p_battStatus->current);
     
     //calc to electric power [mW/h]
     f_tmpdata = f_tmpdata/3600;
-    
-    p_battStatus->left_cap -= f_tmpdata;
+
+    switch(direction) {
+        case READ_CURR_DISCHG:
+            p_battStatus->left_cap -= f_tmpdata;
+            break;
+        case READ_CURR_CHG:
+            p_battStatus->left_cap += f_tmpdata;
+            break;
+    }
 }
 
 int16 read_temperature()

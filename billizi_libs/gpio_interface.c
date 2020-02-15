@@ -51,7 +51,7 @@ void uart_disable()
     P1SEL &= (0xFF & ~(BIT6|BIT7));
     P1DIR |= BIT6;  
 
-    P1_6 = 0;
+    TXD_PIO = 0;
 }
 
 void uart_enable()

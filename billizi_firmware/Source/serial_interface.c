@@ -60,7 +60,7 @@ void uart_init(npiCBack_t npiCback)
 void transmit_comm_data(uint8 tx_len, uint8 *tx_data)
 {
     if(tx_len > 0) {
-        while(0 == NPI_WriteTransport(tx_data, tx_len + 1)) {}
+        while(0 == NPI_WriteTransport(tx_data, tx_len)) {}
     }
 }
 
@@ -81,10 +81,14 @@ void transmit_control_packet(uint8 packet_type)
 
 void transmit_data_stream(uint8 tx_len, uint8 *tx_data) 
 {
+    uint8 packet_size = 0;
+    packet_size = tx_len * 2;
+
     transmit_control_packet(TRUE);
 
     transmit_comm_data(tx_len, tx_data);
     transmit_comm_data(tx_len, tx_data);
+    transmit_comm_data(1, &packet_size);
 
     transmit_control_packet(FALSE);
 }
@@ -123,7 +127,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
     uint8 data_offset = 0;
     uint16 ui16_tmpdata;
 
-    comm_data = osal_mem_alloc(sizeof(uint8) * 18);
+    comm_data = osal_mem_alloc(sizeof(uint8) * BATT_INFO_LEN);
 
     comm_data[data_offset++] = HEADER_INFO;         //1
     comm_data[data_offset++] = FIRMWARE_VERSION;    //2
@@ -158,8 +162,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
     data_offset += sizeof(uint16);
 
     //packet length
-    comm_data[data_offset] = data_offset;           //17
-    comm_data[data_offset+1] = '\0';             //NULL Point
+    //comm_data[data_offset] = data_offset;           //17
 
     return comm_data;
 }   
@@ -173,10 +176,14 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     log_data_t batt_log;
     time_data_t time_stamp;
 
-    comm_data = osal_mem_alloc(sizeof(uint8) * 13);
-    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &batt_log.data_all);
-    print_uart("0x%04X, ", apst_addr->offset_addr);
-    print_uart("0x%08lX\r\n", batt_log.data_all);
+    uint32 tmp_flash;
+
+    comm_data = osal_mem_alloc(sizeof(uint8) * BATT_LOG_LEN);
+    read_flash(apst_addr->offset_addr, FLOPT_UINT32, &tmp_flash);
+    //print_uart("0x%04X, ", apst_addr->offset_addr);
+    //print_uart("0x%08lX\r\n", tmp_flash);
+
+    batt_log.data_all = tmp_flash;
     apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 1);
 
     comm_data[data_offset++] = HEADER_LOG;  //1
@@ -191,27 +198,28 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     comm_data[data_offset++] = batt_log.log_type;
 
     //data type
-    comm_data[data_offset++] = tmp_data[0];
+    comm_data[data_offset++] = tmp_data[0];     //5
 
     //log value(sensor, voltage, current, etc..)k
-    comm_data[data_offset++] = tmp_data[1];
-    comm_data[data_offset++] = tmp_data[2];
+    comm_data[data_offset++] = tmp_data[1];     //6
+    comm_data[data_offset++] = tmp_data[2];     //7
 
     //state machine information
-    comm_data[data_offset++] = batt_log.head_data; //7
+    comm_data[data_offset++] = batt_log.head_data; //8
 
     //time stamp
     read_flash(apst_addr->offset_addr, FLOPT_UINT32, &time_stamp.data_all);
+    apst_addr->offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 1);
     tmp_data = (uint8*)&time_stamp;
     if(tmp_data[0] == LOG_HEAD_TIME) {
-        comm_data[data_offset++] = tmp_data[1];
-        comm_data[data_offset++] = tmp_data[2];
-        comm_data[data_offset++] = tmp_data[3];
+        comm_data[data_offset++] = tmp_data[1];     //9
+        comm_data[data_offset++] = tmp_data[2];     //10
+        comm_data[data_offset++] = tmp_data[3];     //11
     }
 
     //packet length
-    comm_data[data_offset] = data_offset;   //11
-    comm_data[data_offset+1] = '\0';
+    // comm_data[data_offset] = data_offset;   //11
+    // comm_data[data_offset+1] = '\0';
 
     return comm_data;
 }

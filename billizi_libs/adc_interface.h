@@ -36,7 +36,7 @@
 #define MIN_BATT_V  (3.1)
 #define MAX_BATT_V  (4.2)
 #define SERVICE_BATT_V   (3.2)
-#define BATT_REF_V (3.6)
+#define BATT_REF_V (3.75)
 #define BATT_CAPACITY   17760   //3.7[V] * 4800[mA] = 17760[mWh]
 
 typedef enum _ADC_OPT {

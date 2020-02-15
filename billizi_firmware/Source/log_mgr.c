@@ -239,22 +239,12 @@ uint16 wrtie_tail_log(uint16 ai_addr, Control_flag_t ast_flag)
 uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t *apst_times)
 {
     uint32 tmp_flash;
-
     uint16 offset_addr;
-    uint16 comp_addr;
 
-    offset_addr = apst_addr->offset_addr + 2;
+    offset_addr = LOGADDR_VALIDATION(apst_addr->offset_addr + 2);
 
     //사용할 플레시의 페이지 넘김을 체크 
-    comp_addr = offset_addr - PG_END_OFFSET;
-    comp_addr &= 0xFF;
-
-    if (comp_addr >= 1) {
-        if (offset_addr > FLADDR_LOGDATA_ED) {
-            //마지막 주소값을 초과할 경우 첫 주소로 초기화
-            //offset_addr = FLADDR_LOGDATA_ST + comp_addr - 1;
-            offset_addr = FLADDR_LOGDATA_ST;
-        }
+    if ((offset_addr & PG_END_OFFSET) <= 1) {
         //새 페이지 플레시 초기화
         HalFlashErase(ADDR_2_PAGE(offset_addr));
     }
