@@ -326,14 +326,18 @@ bStatus_t OADTarget_AddService(void)
                                      GATT_MAX_ENCRYPT_KEY_SIZE, &oadCBs);
 }
 
+bStatus_t OAD_ReRegisterService(void) {
+    return GATTServApp_RegisterService(oadAttrTbl, GATT_NUM_ATTRS(oadAttrTbl),
+                                       GATT_MAX_ENCRYPT_KEY_SIZE, &oadCBs);
+}
 bStatus_t OADTarget_DelService(void) 
 {
-    if (oadImgIdentifyConfig != NULL) {
-        osal_mem_free(oadImgIdentifyConfig);
-    }
-    if (oadImgBlockConfig != NULL) {
-        osal_mem_free(oadImgBlockConfig);
-    }
+    // if (oadImgIdentifyConfig != NULL) {
+    //     osal_mem_free(oadImgIdentifyConfig);
+    // }
+    // if (oadImgBlockConfig != NULL) {
+    //     osal_mem_free(oadImgBlockConfig);
+    // }
     return GATTServApp_DeregisterService(GATT_SERVICE_HANDLE(oadAttrTbl), NULL);
 }
 

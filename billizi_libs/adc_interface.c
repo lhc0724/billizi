@@ -3,6 +3,31 @@
 static float convert_voltage(uint16 adc_org, adc_option_t adc_opt);
 float g_calib;
 
+void open_adc_driver(adc_option_t adc_opt)
+{
+    switch(adc_opt) {
+        case READ_BATT_SIDE:
+            IO_ADC_INDUCTOR_SIDE = 0;
+            IO_ADC_BATT_SIDE = 1;
+            break;
+        case READ_INDUCTOR_SIDE:
+            IO_ADC_BATT_SIDE = 0;
+            IO_ADC_INDUCTOR_SIDE = 1;
+            break;
+        default:
+            //do not working option
+            break;
+    }
+    if (adc_opt != READ_EXT) {
+        delay_us(50);
+    }
+}
+
+void close_adc_driver()
+{
+    IO_ADC_BATT_SIDE = 0;
+    IO_ADC_INDUCTOR_SIDE = 0;
+}
 
 void get_gparam_calib(void *p_value) 
 {
@@ -72,7 +97,7 @@ float read_voltage(adc_option_t adc_opt)
     uint16 adc_org;
 
     open_adc_driver(adc_opt); 
-
+    
     adc_org = read_adc(adc_opt);
     f_voltage = convert_voltage(adc_org, adc_opt);
 
@@ -130,30 +155,6 @@ uint16 read_current(adc_option_t curr_direction)
     res_curr = ((res_curr * REF125_UNIT * BATT_RATIO_V) / SHUNT_R_VAL) * 1000;
 
     return (uint16)res_curr;
-}
-
-void close_adc_driver()
-{
-    IO_ADC_BATT_SIDE = 0;
-    IO_ADC_INDUCTOR_SIDE = 0;
-}
-
-void open_adc_driver(adc_option_t adc_opt)
-{
-    switch(adc_opt) {
-        case READ_BATT_SIDE:
-            IO_ADC_BATT_SIDE = 1;
-            break;
-        case READ_INDUCTOR_SIDE:
-            IO_ADC_INDUCTOR_SIDE = 1;
-            break;
-        default:
-            //do not working option
-            break;
-    }
-    if (adc_opt != READ_EXT) {
-        delay_us(50);
-    }
 }
 
 /* local function group */

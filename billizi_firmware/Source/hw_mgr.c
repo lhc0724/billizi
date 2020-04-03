@@ -4,31 +4,26 @@
 
 // uint8 check_cable_status()
 // {
-//     uint8 cable_status = 0; 
+//     //default cable status is normal
+//     uint8 cable_status = 0;
 
 //     //PMIC auto detect enable
 //     EN_CONN_RETR = 1;
 //     RETR_TEST_EN = 1;
 
-//     while(1) {
-//         if (!RETR_CABLE_STATUS) {
-//             break;
-//         }
+//     //PMIC enable delay
+//     while(!RETR_CABLE_STATUS) {
 //     }
 
 //     EN_CONN_RETR = 0;
-//     delay_us(1000);
+//     delay_us(20);
 
-//     while(1) {
-//         if (RETR_CABLE_STATUS) {
-//             cable_status = 1;
-//             break;
-//         }
-//     }
-//     if(RETR_CABLE_STATUS) {
-//         //cable check ok.
+//     if(!RETR_CABLE_STATUS) {
+//         //cable is broken
 //         cable_status = 1;
 //     }
+
+
 
 //     RETR_TEST_EN = 0;
 
@@ -41,40 +36,11 @@ void sensor_status_init(sensor_info_t *p_sensor)
     p_sensor->temperature = 0;
 }
 
-void init_batt_capacity(batt_info_t *p_battStatus)
+void init_batt_status_info(batt_info_t *p_battStatus)
 {
-    float curr_cap;
-
     p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
-
-    curr_cap = MAX_BATT_V - MIN_BATT_V;
-    curr_cap = curr_cap - (MAX_BATT_V - p_battStatus->batt_v);
-    curr_cap *= 0.909091;   //1.1을 나누지 않고 역수로 곱함
-
-    p_battStatus->left_cap = BATT_CAPACITY * curr_cap;
-}
-
-void battery_status_mornitoring(batt_info_t *p_battStatus, adc_option_t direction)
-{
-    float f_tmpdata;
-
-    p_battStatus->batt_v = read_voltage(READ_BATT_SIDE);
-    p_battStatus->current = read_current(direction);
-
-    //current power consumption [mW]
-    f_tmpdata = p_battStatus->batt_v * (p_battStatus->current);
-    
-    //calc to electric power [mW/h]
-    f_tmpdata = f_tmpdata/3600;
-
-    switch(direction) {
-        case READ_CURR_DISCHG:
-            p_battStatus->left_cap -= f_tmpdata;
-            break;
-        case READ_CURR_CHG:
-            p_battStatus->left_cap += f_tmpdata;
-            break;
-    }
+    p_battStatus->hysteresis_cnt = 0;
+    p_battStatus->current = 0;
 }
 
 int16 read_temperature()
@@ -117,4 +83,3 @@ static int16 calc_i2c_temperature(uint8 * i2c_data)
 
     return res_temp;
 }
-

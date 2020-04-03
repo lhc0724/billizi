@@ -110,7 +110,6 @@ static void sys_prof_change_cb(uint8 paramID)
 
             switch(command) {
                 case CMD_SETUP_BATT_ID:
-                    //write_flash(FLADDR_CALIB_REF, &command);
                     break;
                 case CMD_SETUP_CALIB:
                     //stored_calib_value(hex2float(BUILD_UINT16(data_char3[2], data_char3[3])));
@@ -149,11 +148,19 @@ static void user_ble_communication_cb(uint8 paramID) {
                     set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &data_char1);
                     break;
                 case 0xB0A0:
-                    VOID OADTarget_AddService();
-                    GAPRole_TerminateConnection();
+                    oad_enabler_control(TRUE);
+                    // VOID OAD_ReRegisterService();
+                    // GAPRole_TerminateConnection();
                     break;
                 case 0xD0C0:
-                    OADTarget_DelService();
+                    oad_enabler_control(FALSE);
+                    // OADTarget_DelService();
+                    // GAPRole_TerminateConnection();
+                    break;
+                case 0xFFFF:
+                    HAL_SYSTEM_RESET();
+                    break;
+                default:
                     GAPRole_TerminateConnection();
                     break;
             }
@@ -171,7 +178,7 @@ static void user_ble_communication_cb(uint8 paramID) {
 uint8 check_certification()
 {
     return 0;
-
+    // 사용자 인증관련 비활성화로 주석처리
     // uint8 status;
     // SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, &status);
     // if(status == 0x30) {

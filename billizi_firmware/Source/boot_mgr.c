@@ -2,6 +2,11 @@
 #include "boot_mgr.h"
 #include "log_mgr.h"
 
+#if defined FEATURE_OAD
+  #include "oad.h"
+  #include "oad_target.h"
+#endif
+
 void Billizi_BootMgr_Init(uint8 task_id)
 {
     //OSAL service init의 Application중 가장 처음 불리는 초기화 함수
@@ -16,6 +21,7 @@ void Billizi_BootMgr_Init(uint8 task_id)
 static uint8 check_adc_calibration(Control_flag_t *apst_flags) 
 {
     flash_16bit_t tmp_flash;
+    uint16 calib_value;
 
     read_flash(FLADDR_CALIB_REF, FLOPT_UINT32, &tmp_flash.all_bits);
     if(tmp_flash.all_bits == EMPTY_FLASH) {
@@ -26,7 +32,7 @@ static uint8 check_adc_calibration(Control_flag_t *apst_flags)
 
     if(tmp_flash.all_bits == 0) {
         //this battery use self-calibration.
-        tmp_flash = search_self_calib();
+        calib_value = search_self_calib();
     } else if (tmp_flash.high_16bit == 0x1000) {
         //adc system setup reference calibration value
         setup_calib_value(FALSE, tmp_flash.low_16bit);
@@ -34,17 +40,13 @@ static uint8 check_adc_calibration(Control_flag_t *apst_flags)
         return 0;
     }
 
-    if (tmp_flash.all_bits == EMPTY_FLASH) {
+    if (!calib_value) {
         //not found ADC Calibration value.
         //need factory initialize
         return 1;
     }else {
         //adc system setup self-calibartion value
-        if(tmp_flash.high_16bit != 0xFFFF) {
-            setup_calib_value(TRUE, tmp_flash.high_16bit);
-        }else {
-            setup_calib_value(TRUE, tmp_flash.low_16bit);
-        }
+        setup_calib_value(TRUE, calib_value);
         apst_flags->self_calib = 1;
     }
 
@@ -66,62 +68,6 @@ static uint8 check_billizi_conntype()
     }
 
     return 0;
-}
-
-/************************************************
- * @fn      previous_batt_status_check
- * 
- * @brief   이번 부팅 이전 배터리 마지막 상태를 확인.
- *          문제 없으면 0 리턴 */
-static uint8 previous_batt_status_check()
-{
-    log_addr_t latest_logAddr;      
-    log_data_t tmp_logdata;
-    Control_flag_t ctrl_flag;
-    
-    //마지막으로 저장된 키 로그의 주소를 가져옴
-    latest_logAddr.key_addr = get_key_address();
-
-    //키 로그의 값을 분석하여 tail log의 주소를 가져옴
-    latest_logAddr.tail_addr = analysis_keylog(latest_logAddr.key_addr);
-
-    if(latest_logAddr.tail_addr == 0 && latest_logAddr.key_addr == FLADDR_LOGKEY_ST) {
-        //key address all empty.
-        //this battery starts service for the first time.
-        ctrl_flag.abnormal = 0;
-
-        latest_logAddr.head_addr = 0;
-        latest_logAddr.offset_addr = 0;
-        set_main_params(PARAM_LOGADDR, sizeof(log_addr_t), &latest_logAddr);
-
-        return ctrl_flag.abnormal;
-    }
-
-    if (!latest_logAddr.tail_addr) {
-        //couldn't find the key-log location.
-        ctrl_flag.abnormal |= ERR_FLASH_MEMS;
-    } else {
-        //read key-log.
-        read_flash(latest_logAddr.tail_addr, FLOPT_UINT32, &tmp_logdata);
-
-        //battery last status analysis.
-        if (tmp_logdata.clc_flag) {
-            latest_logAddr.head_addr = tmp_logdata.log_value;
-            set_main_params(PARAM_LOGADDR, sizeof(log_addr_t), &latest_logAddr);
-            ctrl_flag.need_comm = 1;
-        }
-
-        if (tmp_logdata.log_type != 0x02) { 
-            //key-log, not match flag
-            ctrl_flag.abnormal |= ERR_FLASH_MEMS;
-        }
-
-        if(tmp_logdata.cable_brk) {
-            ctrl_flag.abnormal |= ERR_BROKEN_CABLE;
-        }
-    }
-    
-    return ctrl_flag.abnormal;
 }
 
 static void current_battery_status_check(Control_flag_t *apst_flag)
@@ -150,6 +96,10 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
 
     ctrl_flags.flag_all = 0;
 
+    if(get_OAD_ImgInfo()) {
+    }else {
+    }
+
     if(events & BOOT) {
         /**
          * TODO: 
@@ -160,33 +110,42 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
         uart_enable();
 
         /* check  */
+        //adc 오차 보정값 확인
         if (check_adc_calibration(&ctrl_flags)) {
-            //print_uart("ERR-CALIB\r\n");
+            print_uart("ERR-CALIB\r\n");
             ctrl_flags.factory_setup = 1;
-        }
-        
-        if(check_billizi_conntype()) {
-            //print_uart("ERR-CONN\r\n");
-            ctrl_flags.factory_setup = 1;
-        }
-        
-        if(ctrl_flags.factory_setup) {
-            print_uart("START FACTORY INIT\r\n");
             ctrl_flags.self_calib = 0;
             ctrl_flags.ref_calib = 0;
-            osal_set_event(get_main_taskID(), EVT_FACTORY_INIT);
+        }
+        
+        //현재 배터리 커넥터 정보 확인
+        if(check_billizi_conntype()) {
+            print_uart("ERR-CONN\r\n");
+            ctrl_flags.factory_setup = 1;
+        }
+
+        //위 검사에서 통과 못한항목 존재시 공장초기화
+        if(ctrl_flags.factory_setup) {
+            print_uart("START FACTORY INIT\r\n");
+            osal_set_event(get_main_taskID(), TASK_FACTORY_INIT);
             set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);
             return 0;
         }
 
-        ctrl_flags.abnormal = previous_batt_status_check();
+#if 1
+        //배터리 동작 전 상태확인
         current_battery_status_check(&ctrl_flags);
         //print_uart("FLAGS-%#04X\r\n", ctrl_flags.flag_all);
-        if(ctrl_flags.abnormal & 0x1F) {
-            osal_set_event(get_main_taskID(), EVT_ABNORMAL_PROCESS);
+        if(ctrl_flags.abnormal & 0xFF) {
+            osal_set_event(get_main_taskID(), TASK_ABNORMAL);
         }else {
-            osal_set_event(get_main_taskID(), EVT_USER_SERVICE);
+            osal_set_event(get_main_taskID(), TASK_USER_SERVICE);
         }
+#else
+        //KC인증용 펌웨어
+        ctrl_flags.abnormal = 0;
+        osal_set_event(get_main_taskID(), EVT_USER_SERVICE);
+#endif
         set_main_params(PARAM_CTRL_FLAG, sizeof(ctrl_flags), &ctrl_flags);
 
         return 0;

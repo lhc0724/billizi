@@ -115,6 +115,7 @@ extern const __code img_hdr_t _imgHdr;
  */
 bStatus_t OADTarget_AddService(void);
 bStatus_t OADTarget_DelService(void);
+bStatus_t OAD_ReRegisterService(void);
 
 /*********************************************************************
 *********************************************************************/

@@ -5,11 +5,13 @@
 
 static uint8 rx_buff[RX_BUFF_SIZE+1] = {0};
 static uint8 rx_tail;
+static uint16 debug_vals;
 
 void cb_rx_PacketParser( uint8 port, uint8 events )
 {
     (void)port; //unused input parameters
     uint8 num_bytes = Hal_UART_RxBufLen(NPI_UART_PORT);
+    float tmp = 0;
 
     if(num_bytes) {
         //print_uart("VALID\r\n");
@@ -31,12 +33,45 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
             case 0x31:
-
+                get_gparam_calib(&tmp);
+                //print_uart("%04X\r\n", read_adc_sampling(10, READ_BATT_SIDE));
+                print_uart("%.2f[V], ", read_voltage(READ_BATT_SIDE));
+                print_uart("%.2f\r\n", tmp);
                 break;
             case 0x32:
-                break;
+                print_uart("%.2f[V]\r\n", read_voltage(READ_EXT));
+                // print_uart("CONN_EN-");
+                // if (EN_CONN_RETR) {
+                //     print_uart("0");
+                //     EN_CONN_RETR = 0;
+                // } else {
+                //     print_uart("1");
+                //     EN_CONN_RETR = 1;
+                // }
+                // print_uart("\r\n");
+                // break;
             case 0x33:
+                get_main_params(PARAM_EVT_VALS, &debug_vals);
+                print_uart("%X\r\n", debug_vals);
+                // print_uart("BRK_TEST_EN-");
+                // if (RETR_TEST_EN) {
+                //     print_uart("0");
+                //     RETR_TEST_EN = 0;
+                // } else {
+                //     print_uart("1");
+                //     RETR_TEST_EN = 1;
+                // }
+                // print_uart("\r\n");
                 break;
+            // case 0x34:
+            //     print_uart("STATUS-");
+            //     if (RETR_CABLE_STATUS) {
+            //         print_uart("1");
+            //     }else {
+            //         print_uart("0");
+            //     }
+            //     print_uart("\r\n");
+            //     break;
         }
         rx_buff[rx_tail] = '\n';
 
@@ -70,7 +105,8 @@ void transmit_control_packet(uint8 packet_type)
 
     if(packet_type) {
         //communication beginning.
-        osal_memset(tx_datas, 0xFF, 8);
+        //osal_memset(tx_datas, 1<<7, 8);
+        osal_memset(tx_datas, 0xff, 8);
     }else {
         //end of packet.
         osal_memset(tx_datas, 0, 8);
@@ -82,15 +118,21 @@ void transmit_control_packet(uint8 packet_type)
 void transmit_data_stream(uint8 tx_len, uint8 *tx_data) 
 {
     uint8 packet_size = 0;
-    packet_size = tx_len * 2;
+    packet_size = tx_len;
+
+    // transmit_control_packet(FALSE);
+    // transmit_control_packet(FALSE);
+    transmit_control_packet(FALSE);
+    //delay_us(100);
+
+    if(tx_len > 0) {
+        while (0 == NPI_WriteTransport(tx_data, tx_len)) {}
+        while (0 == NPI_WriteTransport(tx_data, tx_len)) {}
+        while (0 == NPI_WriteTransport(&packet_size, 1)) {}
+    }
+    //transmit_comm_data(1, &packet_size);
 
     transmit_control_packet(TRUE);
-
-    transmit_comm_data(tx_len, tx_data);
-    transmit_comm_data(tx_len, tx_data);
-    transmit_comm_data(1, &packet_size);
-
-    transmit_control_packet(FALSE);
 }
 
 void print_uart(char *tx_data, ...) 
@@ -111,15 +153,15 @@ void print_uart(char *tx_data, ...)
     }
 }
 
-void print_hex(uint8 *tx_buff, uint8 size)
-{
-    uint8 i;
+// void print_hex(uint8 *tx_buff, uint8 size)
+// {
+//     uint8 i;
     
-    for(i = 0; i < size; i++) {
-        print_uart("0x%02X ", tx_buff[i]);
-    }
-    print_uart("\r\n");
-}
+//     for(i = 0; i < size; i++) {
+//         print_uart("0x%02X ", tx_buff[i]);
+//     }
+//     print_uart("\r\n");
+// }
 
 uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus, uint16 log_cnt)
 {
@@ -197,15 +239,15 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
     tmp_data = (uint8*)&batt_log.data_all;     //4
     comm_data[data_offset++] = batt_log.log_type;
 
-    //data type
-    comm_data[data_offset++] = tmp_data[0];     //5
+    //data type: 어떤 데이터인지 알려줌 (전압, 전류, 충격, 온도)
+    comm_data[data_offset++] = tmp_data[3];     //5
 
-    //log value(sensor, voltage, current, etc..)k
+    //log value: 해당 데이터의 값(sensor, voltage, current, etc..)
     comm_data[data_offset++] = tmp_data[1];     //6
     comm_data[data_offset++] = tmp_data[2];     //7
 
     //state machine information
-    comm_data[data_offset++] = batt_log.head_data; //8
+    comm_data[data_offset++] = batt_log.log_evt; //8
 
     //time stamp
     read_flash(apst_addr->offset_addr, FLOPT_UINT32, &time_stamp.data_all);
@@ -217,9 +259,6 @@ uint8 *get_log_packet(log_addr_t *apst_addr)
         comm_data[data_offset++] = tmp_data[3];     //11
     }
 
-    //packet length
-    // comm_data[data_offset] = data_offset;   //11
-    // comm_data[data_offset+1] = '\0';
 
     return comm_data;
 }
