@@ -22,37 +22,34 @@
 
 #include "gapbondmgr.h"
 
-/* user, kiosk common event */
-#define EVT_EXT_V_MONITORING    0x0080
+/* billizi main task events */
+#define EVT_FACTORY_INIT         0x0001
+#define EVT_USER_SERVICE         0x0002
+#define EVT_KIOSK_PROCESS        0x0004
+#define EVT_ABNORMAL_PROCESS     0x0008
+
+/* billizi user service events */
+#define EVT_CERTIFICATION       0x0010    
+#define EVT_DISCHARGE           0x0020
+#define EVT_MORNITORING         0x0040
 
 /* billizi kiosk events */
+#define EVT_EXT_V_MONITORING    0x0080
 #define EVT_COMM                0x0100
 #define EVT_BATT_INFO_REQ       0x0200
 #define EVT_CHARGE              0x0400
 #define EVT_HOLD_BATT           0x0800
 
+#define DEBUG                    0x4000
 #define DBG_EVT_A                0x1000
 
 #define PARAM_LOGADDR       0x01
 #define PARAM_LOGDATA       0x02
 #define PARAM_CTRL_FLAG     0x03
-#define PARAM_EVT_VALS      0x04
 
 typedef enum _TASK_LOCATION {
-    TASK_FACTORY_INIT,
-    TASK_USER_SERVICE,
-    TASK_KIOSK,
-    TASK_ABNORMAL,
-    TASK_MORNITORING,
-    DEBUG
-} state_task_t;
-
-typedef enum _USER_SERVICE_EVT {
-    CERTIFICATION = 1,
-    BATT_PRE_DISCHG,
-    BATT_DISCHG,
-    SERVICE_END
-} Evt_Serv_t;
+    TASK_FACTORY_INIT, TASK_USER, TASK_KIOSK, TASK_ABNORMAL
+}state_task_t;
 
 /*********************************************************************
  * MACROS
@@ -79,6 +76,5 @@ extern uint16 Factory_Init_Process(uint8 task_id, uint16 events);
 extern uint16 User_Service_Process(uint8 task_id, uint16 events);
 extern uint16 Kiosk_Process(uint8 task_id, uint16 events);
 extern uint16 Abnormaly_Process(uint8 task_id, uint16 events);
-extern uint16 Battery_Monitoring_Process(uint8 task_id, uint16 events);
 
 #endif

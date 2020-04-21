@@ -27,8 +27,8 @@
 
 /* ADC distribution resistance value */
 #define EXT_RATIO_V  ((1000+43)/(43))
-#define BATT_RATIO_V  4     //(30+10)/10 = 4
-#define SAMPLING_CNT  5
+#define BATT_RATIO_V ((30+10)/(10)) 
+#define SAMPLING_CNT  20
 
 /* BATT Device reference voltage */
 #define EXT_MIN_V   20
@@ -36,7 +36,7 @@
 #define MIN_BATT_V  (3.1)
 #define MAX_BATT_V  (4.2)
 #define SERVICE_BATT_V   (3.2)
-#define BATT_REF_V  (3.75)
+#define BATT_REF_V (3.75)
 #define BATT_CAPACITY   17760   //3.7[V] * 4800[mA] = 17760[mWh]
 
 typedef enum _ADC_OPT {

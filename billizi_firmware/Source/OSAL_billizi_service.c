@@ -68,8 +68,7 @@ const pTaskEventHandlerFn tasksArr[] = {
     Factory_Init_Process,
     User_Service_Process,
     Kiosk_Process,
-    Abnormaly_Process,
-    Battery_Monitoring_Process
+    Abnormaly_Process
 };
 
 const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );

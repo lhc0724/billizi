@@ -44,29 +44,26 @@
 
 #ifdef HAL_IMAGE_A
 #define FLADDR_MIN             0x1000    //8 Page
-#define FLADDR_CONNTYPE        0x1002
-#define FLADDR_CALIB_REF       0x1003
-#define FLADDR_CALIB_SELF_ST   0x1004
-#define FLADDR_CALIB_SELF_ED   0x11FF
+#define FLADDR_CALIB_REF       0x1002
+#define FLADDR_CALIB_SELF_ST   0x1003
+#define FLADDR_CALIB_SELF_ED   0x1008
+#define FLADDR_CONNTYPE        0x1009
 
-#define FLADDR_LOGKEY_ST    0x1200  //9 Page
-#define FLADDR_LOGKEY_ED    0x13FF
+#define FLADDR_LOGKEY_ST    0x1010
+#define FLADDR_LOGKEY_ED    0x11FF
 
-#define FLADDR_LOGDATA_ST   0x1400  //10 Page
+#define FLADDR_LOGDATA_ST   0x1200  //9 Page
 #define FLADDR_LOGDATA_ED   0x8BFF  //69 Page
 #else 
 #define FLADDR_MIN        0x8E00    //71 Page
-#define FLADDR_CONNTYPE        0x8E02
-#define FLADDR_CALIB_REF       0x8E03
-#define FLADDR_CALIB_SELF_ST   0x8E04
-#define FLADDR_CALIB_SELF_ED   0x8FFF
+#define FLADDR_CALIB      0x8E03
+#define FLADDR_CONNTYPE   0x8E04
 
-#define FLADDR_LOGKEY_ST    0x9000  //72 Page
-#define FLADDR_LOGKEY_ED    0x91FF
+#define FLADDR_LOGKEY_ST    0x8E05
+#define FLADDR_LOGKEY_ED    0x8FFE
 
-#define FLADDR_LOGDATA_ST   0x9200  //73 Page
-#define FLADDR_LOGDATA_ED   0xF5FF  //122 Page
-
+#define FLADDR_LOGDATA_ST   0x9000  //72Page
+#define FLADDR_LOGDATA_ED   0xF5FE  //122 Page
 #endif
 
 /***********
@@ -76,10 +73,8 @@
  */
 #define LOGADDR_VALIDATION(address) (address>FLADDR_LOGDATA_ED)?FLADDR_LOGDATA_ST:address
 #define KEYADDR_VALIDATION(address) (address>FLADDR_LOGKEY_ED)?FLADDR_LOGKEY_ST:address
-#define CALIBADDR_VALIDATION(address) (address>FLADDR_CALIB_SELF_ED)?FLADDR_CALIB_SELF_ST:address
 
 typedef enum FLASH_VARIABLE_OPT {
-    //Flash R/W variable type option
     FLOPT_UINT8,
     FLOPT_UINT16,
     FLOPT_UINT32,
@@ -87,18 +82,18 @@ typedef enum FLASH_VARIABLE_OPT {
 }eFlash_Var_t;
 
 typedef enum _CONNECTOR_TYPE {
-    CONN_MICRO_5   = 0x01,
-    CONN_LIGHTNING = 0x02,
-    CONN_USB_C     = 0x04
+    CONN_MICRO_5  = 0x01,
+    CONN_LIGHTING = 0x02,
+    CONN_USB_C    = 0x04
 } eConnType_t;
 
 typedef union _LOG_DATAS {
     struct {
-        uint8 log_evt : 8;    //8 bit
+        uint8 head_data : 8;    //8 bit
         uint16 log_value : 16;  //16 bit variable
 
         /**************
-         * log type bits
+         * log type flag
          * 00: normal log
          * 01: head log
          * 10: key log
@@ -122,31 +117,11 @@ typedef union _LOG_DATAS {
 
 typedef union _TIMES {
     struct {
-        uint8 log_evt : 8;    
+        uint8 head_data : 8;    
         uint32 time_value : 24; //timer unit: seconds
     };
     uint32 data_all;
 }time_data_t;
-
-typedef struct _FLASH_VARSIZE {
-    union {
-        struct {
-            uint32 byte_1 : 8;
-            uint32 byte_2 : 8;
-            uint32 byte_3 : 8;
-            uint32 byte_4 : 8;
-        };
-    }_8bits;
-
-    union {
-        struct {
-            uint32 high_bit : 16;
-            uint32 low_bit : 16;
-        };
-    }_16bits;
-
-    uint32 _32bits;
-}flash_types_t;
 
 typedef union _FLASH_TYPE16 {
     struct {
@@ -184,18 +159,15 @@ typedef struct _FLASH_ADDR {
 uint8 write_flash(uint16 ai_addr, void *p_value);
 void read_flash(uint16 ai_addr, eFlash_Var_t value_type, void *p_value);
 
+
 uint8 stored_conn_type(eConnType_t ai_connType);
 uint16 stored_adc_calib(uint16 calib_ref);
 uint8 load_flash_conntype();
+float load_flash_calib();
 
 void erase_flash_range(uint16 st_addr, uint16 end_addr);
 void erase_flash_log_area();
 
 void init_flash_mems(uint16 ai_addr);
-void init_calib_mem_page();
-
-uint16 get_calib_address();
-uint16 search_self_calib();
-void update_self_calibration(uint8 calib_status, uint16 adc_value);
 
 #endif
