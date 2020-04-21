@@ -20,8 +20,6 @@ typedef union _ctrl_flag
     struct {    
         //user service flag group
         uint8 serv_en : 1;
-        /** @param certification - 추후 배터리 인증시 플레그 활성화, 배터리 동작유무에 영향 O */
-        uint8 certification : 1;
         uint8 need_comm : 1;
         uint8 use_conn : 1;    
         uint8 logging : 1;
@@ -32,7 +30,7 @@ typedef union _ctrl_flag
         uint8 self_calib : 1;
         uint8 ref_calib : 1;    
 
-        uint8 abnormal : 6;     
+        uint8 abnormal : 8;     
         //total 15 bits
     };
     uint16 flag_all;
@@ -40,9 +38,8 @@ typedef union _ctrl_flag
 
 typedef struct _BATT_STATUS {
     float batt_v;
-    float left_cap; //unit is [mWh], maximum = 3.7 * 4800 = 17760[mWh]
     uint16 current;
-    uint16 pwr_consum;
+    uint16 hysteresis_cnt;
 }batt_info_t;
 
 typedef struct _SENSOR_STATUS {
@@ -51,12 +48,12 @@ typedef struct _SENSOR_STATUS {
 }sensor_info_t;
 
 static int16 calc_i2c_temperature(uint8 * i2c_data);
-void init_batt_capacity(batt_info_t *p_battStatus);
+
+void init_batt_status_info(batt_info_t *p_battStatus);
 
 int16 read_temperature();
 //uint8 check_cable_status();
 
 void sensor_status_init(sensor_info_t *p_sensor);
-void battery_status_mornitoring(batt_info_t *p_battStatus, adc_option_t direction);
 
 #endif

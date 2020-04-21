@@ -1,5 +1,6 @@
 #include "log_mgr.h"
 
+
 uint8 log_system_init(log_data_t *apst_log, log_addr_t *apst_addr) 
 {
     //log data structure initialize
@@ -48,21 +49,53 @@ uint16 get_key_address()
     return key_addr;
 }
 
+uint8 check_valid_key_address(uint16 key_addr)
+{
+    flash_16bit_t flash_value;
+
+    read_flash(key_addr, FLOPT_UINT32, &flash_value.all_bits);
+
+    //this key address can be used.
+    if (flash_value.low_16bit == 0xFFFF) {
+        return 1;
+    } else if (flash_value.high_16bit == 0xFFFF) {
+        return 2;
+    }
+
+    //no available address.
+    return 0;
+}
+
 void stored_key_address(log_addr_t *apst_addr)
 {
+    uint8 address_use = 0;
     flash_16bit_t key_value;
 
     if(apst_addr->key_addr == 0) {
         apst_addr->key_addr = FLADDR_LOGKEY_ST;
     }
 
-    read_flash(apst_addr->key_addr, FLOPT_UINT32, &key_value.all_bits);
-    if(key_value.low_16bit != 0xFFFF) {
-        key_value.high_16bit = apst_addr->tail_addr;
-    }else {
-        key_value.low_16bit = apst_addr->tail_addr;
+    while(!address_use) {
+        address_use = check_valid_key_address(apst_addr->key_addr);
+
+        if(!address_use) {
+            apst_addr->key_addr = KEYADDR_VALIDATION(apst_addr->key_addr + 1);
+            if(apst_addr->key_addr == FLADDR_LOGKEY_ST) {
+                HalFlashErase(ADDR_2_PAGE(FLADDR_LOGKEY_ST));
+            }
+        }
     }
-    
+
+    key_value.all_bits = EMPTY_FLASH;
+    switch(address_use) {
+        case 1:
+            key_value.low_16bit = apst_addr->tail_addr;
+            break;
+        case 2:
+            key_value.high_16bit = apst_addr->tail_addr;
+            break;
+    }
+
     write_flash(apst_addr->key_addr, &key_value.all_bits);
 }
 
@@ -97,7 +130,7 @@ uint16 check_key_log(uint16 keylog_addr, Control_flag_t *apst_flags)
         return search_head_log(keylog_addr);
     }
 
-    if(tmp_log.head_data == LOG_HEAD_ABNORMAL) {
+    if(tmp_log.log_evt == LOG_HEAD_ABNORMAL) {
         //0x08 is abnormal state
         apst_flags->abnormal = 1;
     }
@@ -126,7 +159,7 @@ uint16 search_head_log(uint16 offset)
     while (tmp_addr != offset) {
         read_flash(tmp_addr, FLOPT_UINT32, &tmp_log);
         //시간데이터로 저장된 로그는 필터링
-        if (tmp_log.head_data & 0x0F) {
+        if (tmp_log.log_evt & 0x0F) {
             break;
         }else {
             tmp_addr--;
@@ -144,26 +177,9 @@ uint16 search_head_log(uint16 offset)
     return tmp_addr;
 }
 
-flash_16bit_t search_self_calib()
-{
-    flash_16bit_t flash_value;
-    uint16 i;
-    for(i = FLADDR_CALIB_SELF_ED; i >= FLADDR_CALIB_SELF_ST; i--) {
-        read_flash(i, FLOPT_UINT32, &flash_value.all_bits);
-        if (flash_value.all_bits != EMPTY_FLASH) { break; }
-    }
-
-    if (i < FLADDR_CALIB_SELF_ST) {
-        //not found calibration value
-        flash_value.all_bits = EMPTY_FLASH;
-    }
-
-    return flash_value;   
-}
-
 uint16 calc_number_of_LogDatas(log_addr_t ast_addr)
 {
-    uint16 log_cnt;
+    uint16 log_cnt = 0;
 
     if (ast_addr.head_addr > ast_addr.tail_addr) {
         //Log address after ring buffer rotation
@@ -203,7 +219,7 @@ void generate_new_log_address(log_addr_t *apst_addr)
     read_flash(apst_addr->head_addr, FLOPT_UINT32, &flash_vals);
     if(flash_vals != EMPTY_FLASH) {
         //새로 발급 받은 로그주소가 빈 공간이 아닐경우 해당 페이지 초기화
-        HalFlashErase(ADDR_2_PAGE(apst_addr->head_addr));
+        init_flash_mems(apst_addr->head_addr);
     }
 
 }
@@ -217,16 +233,16 @@ uint16 wrtie_tail_log(uint16 ai_addr, Control_flag_t ast_flag)
     tail_log.log_type = TYPE_TAIL_LOG;
     tail_log.clc_flag = 1;
 
-    tail_log.head_data = 0;
+    tail_log.log_evt = 0;
 
     if(ast_flag.abnormal) {
-        tail_log.head_data |= LOG_HEAD_ABNORMAL;
+        tail_log.log_evt |= LOG_HEAD_ABNORMAL;
     }
 
     if(ast_flag.serv_en) {
-        tail_log.head_data |= LOG_HEAD_EN_SERV;
+        tail_log.log_evt |= LOG_HEAD_EN_SERV;
     }else { 
-        tail_log.head_data |= LOG_HEAD_NO_SERV;
+        tail_log.log_evt |= LOG_HEAD_NO_SERV;
     }
 
     if(write_flash(ai_addr, &tail_log.data_all)) {
