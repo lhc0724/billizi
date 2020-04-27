@@ -7,7 +7,11 @@
 #include "serial_interface.h"
 #include "hw_mgr.h"
 
-#define BOOT                    0x0010
+typedef enum BOOT_OPT {
+    BOOT_INIT = 1,
+    BOOT_PROCESS
+}eBOOT_t;
+//#define BOOT                    0x0010
 
 extern void Billizi_BootMgr_Init(uint8 task_id);
 extern uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events);

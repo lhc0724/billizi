@@ -7,6 +7,8 @@
   #include "oad_target.h"
 #endif
 
+static uint8 check_first_boot();
+
 void Billizi_BootMgr_Init(uint8 task_id)
 {
     //OSAL service init의 Application중 가장 처음 불리는 초기화 함수
@@ -14,8 +16,10 @@ void Billizi_BootMgr_Init(uint8 task_id)
     adc_init();
 
     uart_init(NULL);
-    
-    osal_set_event(task_id, BOOT); 
+    if(check_first_boot()) {
+        osal_set_event(task_id, BOOT_INIT);
+    }
+    osal_set_event(task_id, BOOT_PROCESS); 
 }
 
 static uint8 check_adc_calibration(Control_flag_t *apst_flags) 
@@ -90,13 +94,31 @@ static void current_battery_status_check(Control_flag_t *apst_flag)
 
 uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
 {
-    //log_addr_t keylog_addr;
-    //log_addr_t main_addr;
     Control_flag_t ctrl_flags;
+    uint32 tmp_data;
+    eBOOT_t boot_evt = (eBOOT_t)events;
 
     ctrl_flags.flag_all = 0;
 
-    if(events & BOOT) {
+    switch(boot_evt) {
+        case BOOT_INIT:
+            //첫부팅시 부팅에 영향을 주는 flash 저장 값 초기화
+            HalFlashErase(ADDR_2_PAGE(FLADDR_MIN));
+            HalFlashErase(ADDR_2_PAGE(FLADDR_LOGKEY_ST));
+
+            erase_flash_log_area();
+
+            //image 정보값 저장
+            tmp_data = IMG_INFO;
+            write_flash(FLADDR_MIN, &tmp_data);
+
+            osal_set_event(task_id, BOOT_PROCESS);
+            break;
+        case BOOT_PROCESS:
+            break;
+    }
+
+    if(events & BOOT_INIT) {
         /**
          * TODO: 
          * - check factory init status
@@ -149,4 +171,25 @@ uint16 Billizi_BootMgr_ProcessEvent(uint8 task_id, uint16 events)
     }
 
     return 0; //task free
+}
+
+static uint8 check_first_boot() 
+{
+    //배터리의 부팅이 처음인지 검사하는 함수
+    //사용가능 플래시의 첫번째 값을 읽어 oad image값과 맞는지 검사
+
+    uint32 img_value;
+    uint8 res = 1;      //결과값 1일경우 첫 부팅으로 취급
+
+    read_flash(FLADDR_MIN, FLOPT_UINT32, &img_value);
+    switch (get_oad_img_info()) {
+        case 0x41:  //img 'A'
+        case 0x42:  //img 'B'
+            if (img_value == IMG_INFO) {
+                res = 0;
+            }
+            break;
+    }
+
+    return res;
 }
