@@ -255,6 +255,7 @@ static const __code aes_hdr_t _aesHdr = {
  */
 
 static uint16 oadBlkNum = 0, oadBlkTot = 0xFFFF;
+static uint8 oad_en = 0;
 
 /*********************************************************************
  * LOCAL FUNCTIONS
@@ -326,14 +327,18 @@ bStatus_t OADTarget_AddService(void)
                                      GATT_MAX_ENCRYPT_KEY_SIZE, &oadCBs);
 }
 
+bStatus_t OAD_ReRegisterService(void) {
+    return GATTServApp_RegisterService(oadAttrTbl, GATT_NUM_ATTRS(oadAttrTbl),
+                                       GATT_MAX_ENCRYPT_KEY_SIZE, &oadCBs);
+}
 bStatus_t OADTarget_DelService(void) 
 {
-    if (oadImgIdentifyConfig != NULL) {
-        osal_mem_free(oadImgIdentifyConfig);
-    }
-    if (oadImgBlockConfig != NULL) {
-        osal_mem_free(oadImgBlockConfig);
-    }
+    // if (oadImgIdentifyConfig != NULL) {
+    //     osal_mem_free(oadImgIdentifyConfig);
+    // }
+    // if (oadImgBlockConfig != NULL) {
+    //     osal_mem_free(oadImgBlockConfig);
+    // }
     return GATTServApp_DeregisterService(GATT_SERVICE_HANDLE(oadAttrTbl), NULL);
 }
 
@@ -384,6 +389,11 @@ static bStatus_t oadWriteAttrCB(uint16 connHandle, gattAttribute_t *pAttr,
                                 uint8 method)
 {
   bStatus_t status = SUCCESS;
+
+  if(!oad_en) {
+      status = ATT_ERR_ATTR_NOT_FOUND;
+      return status;
+  }
 
   if ( pAttr->type.len == ATT_BT_UUID_SIZE )
   {
@@ -886,3 +896,24 @@ static uint8 checkDL(void)
 
 /*********************************************************************
 *********************************************************************/
+
+void oad_enabler_control(uint8 en_opt) 
+{
+    if(en_opt) {
+        oad_en = 1;
+    }else {
+        oad_en = 0;
+    }
+}
+
+uint8 get_oad_img_info()
+{
+    uint8 img_info = 0;
+
+    #if defined HAL_IMAGE_A
+      img_info = 0x41;  //'A'
+    #else
+      img_info = 0x42;  //'B'
+    #endif
+    return img_info;
+}
