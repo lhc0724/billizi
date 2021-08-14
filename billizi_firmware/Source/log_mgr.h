@@ -30,6 +30,8 @@
 // #define TYPE_NORMAL_LOG 0x04 
 #define TYPE_INVALID_LOG (TYPE_TAIL_LOG | TYPE_HEAD_LOG | TYPE_NORMAL_LOG)
 
+//flash_interface.h 있는 log_data_t를 대체할 스트럭쳐
+//아직 사용하지 않는중..
 typedef struct _NEW_LOGS {
     union {
         struct {
@@ -50,10 +52,10 @@ uint8 LogAddress_valid_check(uint16 addr);
 void generate_new_log_address(log_addr_t *apst_addr);
 
 uint16 get_key_address();
-void stored_key_address(log_addr_t *apst_addr);
+void stroed_key_value(log_addr_t *apst_addr);
 
 uint16 analysis_keylog(uint16 key_addr);
-uint16 check_key_log(uint16 keylog_addr, Control_flag_t *apst_flags);
+uint16 analysis_tail_log(uint16 key_value);
 uint16 search_head_log(uint16 offset);
 
 uint8 stored_log_data(log_addr_t *apst_addr, log_data_t *apst_data, time_data_t *apst_times);
