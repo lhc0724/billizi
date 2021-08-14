@@ -19,16 +19,17 @@ typedef union _ctrl_flag
 {   
     struct {    
         //user service flag group
-        uint8 serv_en : 1;
-        uint8 need_comm : 1;
-        uint8 use_conn : 1;    
-        uint8 logging : 1;
-        uint8 batt_dischg : 1;
+        uint8 serv_en : 1; 		// 사용자 서비스 활성, 0인 경우 방전 금지함.
+        uint8 need_comm : 1; 	// 충전선 통신 여부
+        uint8 use_conn : 1;		// 방전할 때 빌리지 코넥터 사용 여부
+        uint8 logging : 1; 		// 로그를 해야함
+        uint8 batt_dischg : 1; 	// 방전 여부
 
         //factory init flag group
-        uint8 factory_setup : 1;
-        uint8 self_calib : 1;
-        uint8 ref_calib : 1;    
+        uint8 just_after_fw_download : 1; 	//1 : 펌웨어 다운로드 직후여서 코넥터 종류와 ADC보정이 안된 상태, 
+											//0 : 배터리 설정이 끝난 상태 
+        uint8 self_calib : 1; // 1:자가 조정 후
+        uint8 ref_calib : 1;  // 1:외부 기준에 의한 조정
 
         uint8 abnormal : 8;     
         //total 15 bits
