@@ -2,33 +2,37 @@
 #include "hal_i2c.h"
 
 
-// uint8 check_cable_status()
-// {
-//     //default cable status is normal
-//     uint8 cable_status = 0;
+uint8 check_cable_status()
+{
+	/*
+	빌리지 케이블 불량 확인
+	return 0 : 정상
+	return 1 : 불량
+	*/
+	//default cable status is normal
+	uint8 cable_status = 0;
 
-//     //PMIC auto detect enable
-//     EN_CONN_RETR = 1;
-//     RETR_TEST_EN = 1;
+	//PMIC auto detect enable
+	//NMOS두개를 켜서 10킬로오옴 저항 부하로 PMIC를 깨움
+	EN_CONN_RETR = 1;  // 코넥터 충전 활성화
+	RETR_TEST_EN = 1;  // 빌리지 케이르 단락 검사 활성화
 
-//     //PMIC enable delay
-//     while(!RETR_CABLE_STATUS) {
-//     }
+	//delay for PMIC
+	while(!RETR_CABLE_STATUS) {
+		// if too late, PMIC is fail
+	}
 
-//     EN_CONN_RETR = 0;
-//     delay_us(20);
+	EN_CONN_RETR = 0;
+	delay_us(20);
 
-//     if(!RETR_CABLE_STATUS) {
-//         //cable is broken
-//         cable_status = 1;
-//     }
+	if(!RETR_CABLE_STATUS) {
+		//cable is broken
+		cable_status = 1;
+	}
+	RETR_TEST_EN = 0;
 
-
-
-//     RETR_TEST_EN = 0;
-
-//     return cable_status;
-// }
+	return cable_status;
+}
 
 void sensor_status_init(sensor_info_t *p_sensor)
 {
