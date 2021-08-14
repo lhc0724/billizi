@@ -14,21 +14,23 @@
 /* GPIO definition */
 /* batt upper snu v1.0.0 gpio allocation. */
 /* definition of battery control gpio register */
-#define RETR_PUSH_LEFT     P1_1 //INPUT
-#define RETR_PUSH_RIGHT    P2_0 //INPUT
-#define RETR_CABLE_STATUS  P0_3 //INPUT
-#define RETR_TEST_EN       P0_4 //OUTPUT
-
-#define EN_CONN_USB        P1_2 //OUTPUT
-#define EN_CONN_RETR       P0_5 //OUTPUT
-#define CHG_EN             P1_5 //OUTPUT
-#define TXD_PIO            P1_6 //UART Txd pin
+//						   	P0_0 // ADC?
+#define RETR_CABLE_STATUS  	P0_3 //INPUT
+#define RETR_TEST_EN       	P0_4 //OUTPUT
+#define EN_CONN_RETR       	P0_5 //OUTPUT
+//						   	P0_6 // ADC?
+#define VIB_SENSOR         	P0_7 //INPUT
 
 #define IO_ADC_INDUCTOR_SIDE    P1_0 //OUTPUT, adc drive, before shunt resistor
-#define IO_ADC_BATT_SIDE        P1_4 //OUTPUT, adc drive, after shunt resistor
-#define POWER_EN           P1_3 //OUTPUT
+#define RETR_PUSH_LEFT     		P1_1 //INPUT
+#define EN_CONN_USB        		P1_2 //OUTPUT
+#define POWER_EN           		P1_3 //OUTPUT
+#define IO_ADC_BATT_SIDE   		P1_4 //OUTPUT, adc drive, after shunt resistor
+#define CHG_EN             		P1_5 //OUTPUT
+#define TXD_PIO            		P1_6 //UART Txd pin
 
-#define VIB_SENSOR         P0_7 //INPUT
+#define RETR_PUSH_RIGHT    		P2_0 //INPUT
+
 //#define VIB_MOTOR          P0_7 //OUTPUT
 
 /* definition for bit */
