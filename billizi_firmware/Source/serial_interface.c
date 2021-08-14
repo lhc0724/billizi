@@ -6,6 +6,7 @@
 static uint8 rx_buff[RX_BUFF_SIZE+1] = {0};
 static uint8 rx_tail;
 static uint16 debug_vals;
+static uint8 gucChgState = 0;
 
 void cb_rx_PacketParser( uint8 port, uint8 events )
 {
@@ -32,13 +33,14 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
 
     if(rx_buff[rx_tail-1] >= 0x0A && rx_buff[rx_tail-1] <= 0x0D) {
         switch(rx_buff[0]) {
-            case 0x31:
+            case 0x31: // '1'
                 get_gparam_calib(&tmp);
                 //print_uart("%04X\r\n", read_adc_sampling(10, READ_BATT_SIDE));
                 print_uart("%.2f[V], ", read_voltage(READ_BATT_SIDE));
+                print_uart("%.2f[V], ", read_voltage(READ_INDUCTOR_SIDE));
                 print_uart("%.2f\r\n", tmp);
                 break;
-            case 0x32:
+            case 0x32: //'2'
                 print_uart("%.2f[V]\r\n", read_voltage(READ_EXT));
                 // print_uart("CONN_EN-");
                 // if (EN_CONN_RETR) {
@@ -50,7 +52,7 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
                 // }
                 // print_uart("\r\n");
                 // break;
-            case 0x33:
+            case 0x33: // '3'
                 get_main_params(PARAM_EVT_VALS, &debug_vals);
                 print_uart("%X\r\n", debug_vals);
                 // print_uart("BRK_TEST_EN-");
@@ -72,6 +74,30 @@ void cb_rx_PacketParser( uint8 port, uint8 events )
             //     }
             //     print_uart("\r\n");
             //     break;
+        case 'r' :
+        case 'R' :
+        case 'v' :
+        case 'V' :
+              print_uart("svn revision r3562 \r\n");
+          break;
+        case 'c' : case 'C' :
+          if (gucChgState) { // currently charging
+                    TXD_PIO = 0;
+                     CHG_EN = 0;
+                     gucChgState = 0;
+                       print_uart("Stop charging...\r\n");
+          }
+          else { // currently not charging
+                     TXD_PIO = 0;
+                     CHG_EN = 1;
+                     gucChgState = 1;
+                       print_uart("Start charging...\r\n");
+          }
+ 
+          break;
+        default :
+          print_uart("help :\r\n");
+          break;
         }
         rx_buff[rx_tail] = '\n';
 
@@ -106,9 +132,11 @@ void transmit_control_packet(uint8 packet_type)
     if(packet_type) {
         //communication beginning.
         //osal_memset(tx_datas, 1<<7, 8);
-        osal_memset(tx_datas, 0xff, 8);
+        osal_memset(tx_datas, 0xff, 8); 
     }else {
         //end of packet.
+		// 송신측 회로에 있는 캐패시터 충전 전압 제공으로 신호 안정화
+		// 회로가 반전되어 있으므로..
         osal_memset(tx_datas, 0, 8);
     }
 
@@ -125,7 +153,7 @@ void transmit_data_stream(uint8 tx_len, uint8 *tx_data)
     transmit_control_packet(FALSE);
     //delay_us(100);
 
-    if(tx_len > 0) {
+    if(tx_len > 0) { // 두 번 반복해서 전송, 후에 데이터 길이 추가
         while (0 == NPI_WriteTransport(tx_data, tx_len)) {}
         while (0 == NPI_WriteTransport(tx_data, tx_len)) {}
         while (0 == NPI_WriteTransport(&packet_size, 1)) {}
@@ -207,7 +235,7 @@ uint8 *get_head_packet(Control_flag_t *apst_flags, batt_info_t *apst_BattStatus,
     //comm_data[data_offset] = data_offset;           //17
 
     return comm_data;
-}   
+}
 
 uint8 *get_log_packet(log_addr_t *apst_addr) 
 {
