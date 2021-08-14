@@ -68,8 +68,10 @@ static void peripheralStateNotificationCB(gaprole_States_t newState)
 {
     switch (newState) {
         case GAPROLE_ADVERTISING:
+		print_uart("advertizing...\r\n");
             break;
         case GAPROLE_CONNECTED:
+		print_uart("connected...3\r\n");
             break;
         default:
             break;
@@ -91,10 +93,12 @@ static void sys_prof_change_cb(uint8 paramID)
     uint8 data_char1;
 
     uint16 command;
-    
+	print_uart("profile changed..1\r\n");
+
     switch (paramID) {
         case SIMPLEPROFILE_CHAR1:
             SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &data_char1);
+			print_uart("char 1: %d \r\n",data_char1);
             if(data_char1 & 0x07) {
                 if(!stored_conn_type((eConnType_t)data_char1)) {
             //        print_uart("ConnType - %d\r\n", data_char1);
@@ -130,11 +134,13 @@ static void sys_prof_change_cb(uint8 paramID)
     }
 }
 
-static void user_ble_communication_cb(uint8 paramID) {
+static void user_ble_communication_cb(uint8 paramID) 
+{
     uint8 data_char3[20];
     uint8 data_char1;
 
     uint16 command;
+	print_uart("profile changed..2\r\n");
     
     switch (paramID) {
         case SIMPLEPROFILE_CHAR3:
@@ -147,7 +153,7 @@ static void user_ble_communication_cb(uint8 paramID) {
                     print_uart("CMD_Certifi\r\n");
                     set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &data_char1);
                     break;
-                case 0xB0A0:
+                case 0xB0A0: // 엔디안 때문에.. 피씨에서는 A0B0로 입력해야 함.
                     oad_enabler_control(TRUE);
                     // VOID OAD_ReRegisterService();
                     // GAPRole_TerminateConnection();
@@ -168,6 +174,7 @@ static void user_ble_communication_cb(uint8 paramID) {
         case SIMPLEPROFILE_CHAR1:
             SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &data_char1);
             set_simpleprofile(SIMPLEPROFILE_CHAR2, sizeof(uint8), &data_char1);
+			print_uart("char 1: %d \r\n",data_char1);
             break;
         default:
             // do nothing
