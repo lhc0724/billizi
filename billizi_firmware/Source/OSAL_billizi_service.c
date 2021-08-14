@@ -40,7 +40,6 @@
 
 /* Application */
 #include "main_task.h"
-#include "boot_mgr.h"
 
 /*********************************************************************
  * GLOBAL VARIABLES
@@ -63,13 +62,15 @@ const pTaskEventHandlerFn tasksArr[] = {
     GAPRole_ProcessEvent,          // task 8
     GAPBondMgr_ProcessEvent,       // task 9
     GATTServApp_ProcessEvent,      // task 10
-    Billizi_BootMgr_ProcessEvent,  // task 11
-    Billizi_Main_ProcessEvent,     // task 12
-    Factory_Init_Process,
-    User_Service_Process,
-    Kiosk_Process,
-    Abnormaly_Process,
-    Battery_Monitoring_Process
+    BlzBat_ProcessEvent  		   // task_11
+/*
+    Billizi_Main_ProcessEvent,     // task_12
+    Factory_Init_Process,			// task_13
+    User_Service_Process,			// task_14
+    Kiosk_Process,					// task_15
+    Abnormal_Process,				// task_16
+    Battery_Monitoring_Process		// task_17
+*/
 };
 
 const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
@@ -129,9 +130,9 @@ void osalInitTasks( void )
   GATTServApp_Init( taskID++ );
 
   /* Application */
-  Billizi_BootMgr_Init( taskID++ );
-  Billizi_Process_Init( taskID++ );
-  StateMachine_Process_init( taskID );
+  BlzBat_Init( taskID++ ); // task_11
+//  Billizi_BootMgr_Init( taskID++ ); // task_11
+//  StateMachine_Process_init( taskID ); // task_13, task_14, task_15, task_16, task_17
 }
 
 /*********************************************************************
